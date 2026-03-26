@@ -10,7 +10,7 @@
 
 [![Docker](https://img.shields.io/docker/pulls/vera-ai/latest?style=for-the-badge)](https://hub.docker.com/r/vera-ai/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Gitea](https://img.shields.io/badge/repo-Gitea-orange?style=for-the-badge)](https://speedyfox.app/SpeedyFoxAi/vera-ai-v2)
+[![GitHub](https://img.shields.io/badge/repo-GitHub-blue?style=for-the-badge)](https://github.com/speedyfoxai/vera-ai)
 
 ---
 
@@ -351,7 +351,7 @@ Use the provided context to give informed, personalized responses.
 
 ```bash
 # 1. Clone
-git clone https://speedyfox.app/SpeedyFoxAi/vera-ai-v2.git
+git clone https://github.com/speedyfoxai/vera-ai.git
 cd vera-ai-v2
 
 # 2. Configure
@@ -383,7 +383,7 @@ curl http://localhost:11434/
 ### Step 1: Clone Repository
 
 ```bash
-git clone https://speedyfox.app/SpeedyFoxAi/vera-ai-v2.git
+git clone https://github.com/speedyfoxai/vera-ai.git
 cd vera-ai-v2
 ```
 
@@ -644,7 +644,7 @@ sudo lsof -i :11434
 ### Build from Source
 
 ```bash
-git clone https://speedyfox.app/SpeedyFoxAi/vera-ai-v2.git
+git clone https://github.com/speedyfoxai/vera-ai.git
 cd vera-ai-v2
 pip install -r requirements.txt
 docker compose build
@@ -677,8 +677,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 | Resource | Link |
 |----------|------|
-| **Repository** | https://speedyfox.app/SpeedyFoxAi/vera-ai-v2 |
-| **Issues** | https://speedyfox.app/SpeedyFoxAi/vera-ai-v2/issues |
+| **Repository** | https://github.com/speedyfoxai/vera-ai |
+| **Issues** | https://github.com/speedyfoxai/vera-ai/issues |
 
 ---
 
