@@ -440,6 +440,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 **Vera-AI** — *True AI Memory*
 
-Made with ❤️ by the OpenClaw team
+Brought to you by SpeedyFoxAi
 
 </div>
