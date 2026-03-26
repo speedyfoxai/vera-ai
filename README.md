@@ -22,6 +22,108 @@ Every conversation is stored in Qdrant vector database and retrieved contextuall
 
 ---
 
+## 🔄 How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              REQUEST FLOW                                        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+    ┌──────────┐         ┌──────────┐         ┌──────────┐         ┌──────────┐
+    │  Client  │ ──(1)──▶│ Vera-AI  │ ──(3)──▶│  Ollama  │ ──(5)──▶│ Response │
+    │  (You)   │         │  Proxy   │         │   LLM    │         │  to User │
+    └──────────┘         └────┬─────┘         └──────────┘         └──────────┘
+                              │
+                              │ (2) Query semantic memory
+                              │
+                              ▼
+                       ┌──────────┐
+                       │ Qdrant   │
+                       │ Vector DB│
+                       └──────────┘
+                              │
+                              │ (4) Store conversation turn
+                              │
+                              ▼
+                       ┌──────────┐
+                       │ Memory   │
+                       │ Storage  │
+                       └──────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           4-LAYER CONTEXT BUILD                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+    Incoming Request (POST /api/chat)
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │ Layer 1: System Prompt                                                      │
+    │   • Static context from prompts/systemprompt.md                            │
+    │   • Preserved unchanged, passed through                                      │
+    └─────────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │ Layer 2: Semantic Memory                                                    │
+    │   • Query Qdrant with user question                                         │
+    │   • Retrieve curated Q&A pairs by relevance                                 │
+    │   • Limited by semantic_token_budget                                        │
+    └─────────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │ Layer 3: Recent Context                                                     │
+    │   • Last N conversation turns from Qdrant                                   │
+    │   • Chronological order, recent memories first                              │
+    │   • Limited by context_token_budget                                         │
+    └─────────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │ Layer 4: Current Messages                                                    │
+    │   • User message from current request                                       │
+    │   • Passed through unchanged                                                │
+    └─────────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+         [augmented request] ──▶ Ollama LLM ──▶ Response
+
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           MEMORY STORAGE FLOW                                    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+    User Question + Assistant Response
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │ Store as "raw" memory in Qdrant                                             │
+    │   • User ID, role, content, timestamp                                       │
+    │   • Embedded using configured embedding model                               │
+    └─────────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │ Daily Curator (02:00)                                                        │
+    │   • Processes raw memories from last 24h                                    │
+    │   • Summarizes into curated Q&A pairs                                      │
+    │   • Stores as "curated" memories                                            │
+    │   • Deletes processed raw memories                                          │
+    └─────────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │ Monthly Curator (03:00 on 1st)                                              │
+    │   • Processes ALL remaining raw memories                                    │
+    │   • Full database cleanup                                                   │
+    │   • Ensures no memories are orphaned                                        │
+    └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 🌟 Features
 
 | Feature | Description |
@@ -81,24 +183,18 @@ cd vera-ai-v2
 Create `.env` file (or copy from `.env.example`):
 
 ```bash
-# ═══════════════════════════════════════════════════════════════
 # User/Group Configuration
-# ═══════════════════════════════════════════════════════════════
 # IMPORTANT: Match these to your host user for volume permissions
 
 APP_UID=1000    # Run: id -u  to get your UID
 APP_GID=1000    # Run: id -g  to get your GID
 
-# ═══════════════════════════════════════════════════════════════
 # Timezone Configuration
-# ═══════════════════════════════════════════════════════════════
 # Affects curator schedule (daily at 02:00, monthly on 1st at 03:00)
 
 TZ=America/Chicago
 
-# ═══════════════════════════════════════════════════════════════
 # Optional: Cloud Model Routing
-# ═══════════════════════════════════════════════════════════════
 # OPENROUTER_API_KEY=your_api_key_here
 ```
 
@@ -169,27 +265,27 @@ docker logs vera-ai --tail 20
 ### Step 6: Verify Installation
 
 ```bash
-# ✅ Health check
+# Health check
 curl http://localhost:11434/
 # Expected: {"status":"ok","ollama":"reachable"}
 
-# ✅ Container status
+# Container status
 docker ps --format "table {{.Names}}\t{{.Status}}"
 # Expected: vera-ai   Up X minutes (healthy)
 
-# ✅ Timezone
+# Timezone
 docker exec vera-ai date
 # Should show your timezone (e.g., CDT for America/Chicago)
 
-# ✅ User permissions
+# User permissions
 docker exec vera-ai id
 # Expected: uid=1000(appuser) gid=1000(appgroup)
 
-# ✅ Directories
+# Directories
 docker exec vera-ai ls -la /app/prompts/
 # Should show: curator_prompt.md, systemprompt.md
 
-# ✅ Test chat
+# Test chat
 curl -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen3.5:397b-cloud","messages":[{"role":"user","content":"hello"}],"stream":false}'
@@ -221,26 +317,26 @@ curl -X POST http://localhost:11434/api/chat \
 
 ```
 vera-ai-v2/
-├── 📁 config/
-│   └── 📄 config.toml        # Main configuration
-├── 📁 prompts/
-│   ├── 📄 curator_prompt.md  # Memory curation prompt
-│   └── 📄 systemprompt.md    # System context
-├── 📁 logs/                  # Debug logs (when debug=true)
-├── 📁 app/
-│   ├── 🐍 main.py            # FastAPI application
-│   ├── 🐍 config.py          # Configuration loader
-│   ├── 🐍 curator.py         # Memory curation
-│   ├── 🐍 proxy_handler.py  # Chat handling
-│   ├── 🐍 qdrant_service.py # Vector operations
-│   ├── 🐍 singleton.py      # QdrantService singleton
-│   └── 🐍 utils.py          # Utilities
-├── 📁 static/               # Legacy symlinks
-├── 📄 .env.example          # Environment template
-├── 📄 docker-compose.yml    # Docker Compose
-├── 📄 Dockerfile            # Container definition
-├── 📄 requirements.txt      # Python dependencies
-└── 📄 README.md             # This file
+├── config/
+│   └── config.toml        # Main configuration
+├── prompts/
+│   ├── curator_prompt.md  # Memory curation prompt
+│   └── systemprompt.md    # System context
+├── logs/                  # Debug logs (when debug=true)
+├── app/
+│   ├── main.py            # FastAPI application
+│   ├── config.py          # Configuration loader
+│   ├── curator.py         # Memory curation
+│   ├── proxy_handler.py   # Chat handling
+│   ├── qdrant_service.py  # Vector operations
+│   ├── singleton.py       # QdrantService singleton
+│   └── utils.py           # Utilities
+├── static/                # Legacy symlinks
+├── .env.example           # Environment template
+├── docker-compose.yml     # Docker Compose
+├── Dockerfile             # Container definition
+├── requirements.txt       # Python dependencies
+└── README.md              # This file
 ```
 
 ## 🐳 Docker Compose
@@ -281,11 +377,11 @@ The `TZ` variable sets the container timezone for the scheduler:
 
 ```bash
 # Common timezones
-TZ=UTC                 # Coordinated Universal Time
-TZ=America/New_York    # Eastern Time
-TZ=America/Chicago     # Central Time
-TZ=America/Los_Angeles # Pacific Time
-TZ=Europe/London       # GMT/BST
+TZ=UTC                  # Coordinated Universal Time
+TZ=America/New_York     # Eastern Time
+TZ=America/Chicago      # Central Time
+TZ=America/Los_Angeles  # Pacific Time
+TZ=Europe/London        # GMT/BST
 ```
 
 **Curation Schedule:**
@@ -316,28 +412,6 @@ curl -X POST "http://localhost:11434/curator/run?full=true"
 
 ## 🧠 Memory System
 
-### 4-Layer Context
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Layer 1: System Prompt                                      │
-│   - From prompts/systemprompt.md                            │
-│   - Static context, curator can append rules                │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 2: Semantic Memory                                    │
-│   - Curated Q&A pairs from Qdrant                           │
-│   - Retrieved by relevance to current message               │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 3: Recent Context                                     │
-│   - Last N conversation turns from Qdrant                   │
-│   - Chronological order                                      │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 4: Current Messages                                   │
-│   - User/assistant messages from current request            │
-│   - Passed through unchanged                                │
-└─────────────────────────────────────────────────────────────┘
-```
-
 ### Memory Types
 
 | Type | Description | Retention |
@@ -345,6 +419,11 @@ curl -X POST "http://localhost:11434/curator/run?full=true"
 | `raw` | Unprocessed conversation turns | Until curation |
 | `curated` | Cleaned Q&A pairs | Permanent |
 | `test` | Test entries | Can be ignored |
+
+### Curation Process
+
+1. **Daily (02:00)**: Processes raw memories from last 24h into curated Q&A pairs
+2. **Monthly (03:00 on 1st)**: Processes ALL remaining raw memories for full cleanup
 
 ## 🔧 Troubleshooting
 
