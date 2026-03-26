@@ -1,0 +1,51 @@
+# Vera-AI Docker Compose Configuration
+# Ollama: http://10.0.0.10:11434
+# Qdrant: http://10.0.0.22:6333
+#
+# Usage:
+#   1. Copy .env.example to .env and customize
+#   2. Build: docker compose build
+#   3. Run:   docker compose up -d
+#
+# Volume mappings:
+#   - config.toml: Configuration file (read-only)
+#   - prompts/:    Curator and system prompts (read-write for curator rules)
+#   - logs/:       Debug logs (read-write)
+
+services:
+  vera-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_UID: ${APP_UID:-999}
+        APP_GID: ${APP_GID:-999}
+    image: vera-ai:latest
+    container_name: vera-ai
+    env_file:
+      - .env
+    environment:
+      # Override defaults from .env file
+      - APP_UID=${APP_UID:-999}
+      - APP_GID=${APP_GID:-999}
+      - TZ=${TZ:-UTC}
+    volumes:
+      # Configuration file (read-only)
+      - ./config/config.toml:/app/config/config.toml:ro
+      # Prompts directory (read-write for curator to append rules)
+      - ./prompts:/app/prompts:rw
+      # Debug logs directory (read-write)
+      - ./logs:/app/logs:rw
+    network_mode: "host"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

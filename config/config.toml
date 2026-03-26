@@ -1,0 +1,21 @@
+[general]
+ollama_host = "http://10.0.0.10:11434"
+qdrant_host = "http://10.0.0.22:6333"
+qdrant_collection = "memories"
+embedding_model = "snowflake-arctic-embed2"
+debug = false
+
+[layers]
+# Note: system_token_budget removed - system prompt is never truncated
+semantic_token_budget = 25000
+context_token_budget = 22000
+semantic_search_turns = 2
+semantic_score_threshold = 0.6
+
+[curator]
+# Daily curation: processes recent 24h of raw memories
+run_time = "02:00"
+# Monthly full curation: processes ALL raw memories
+full_run_time = "03:00"
+full_run_day = 1  # Day of month (1st)
+curator_model = "gpt-oss:120b"
