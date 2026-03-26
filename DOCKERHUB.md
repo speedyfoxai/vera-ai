@@ -370,7 +370,7 @@ TZ=America/Chicago
 
 ## Source Code
 
-- **Gitea**: http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2
+- **Gitea**: https://speedyfox.app/SpeedyFoxAi/vera-ai-v2
 
 ---
 
