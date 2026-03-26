@@ -59,7 +59,7 @@ docker run -d \
   -v ./config/config.toml:/app/config/config.toml:ro \
   -v ./prompts:/app/prompts:rw \
   -v ./logs:/app/logs:rw \
-  your-username/vera-ai:latest
+  mdkrushr/vera-ai:latest
 ```
 
 ### Option 2: Docker Compose
@@ -69,7 +69,7 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   vera-ai:
-    image: your-username/vera-ai:latest
+    image: mdkrushr/vera-ai:latest
     container_name: VeraAI
     restart: unless-stopped
     network_mode: host
@@ -243,7 +243,7 @@ docker run -d \
   -v ./config/config.toml:/app/config/config.toml:ro \
   -v ./prompts:/app/prompts:rw \
   -v ./logs:/app/logs:rw \
-  your-username/vera-ai:latest
+  mdkrushr/vera-ai:latest
 ```
 
 **Config for same-host (config/config.toml):**
@@ -270,7 +270,7 @@ services:
     volumes: [qdrant_data:/qdrant/storage]
 
   vera-ai:
-    image: your-username/vera-ai:latest
+    image: mdkrushr/vera-ai:latest
     network_mode: host
     volumes:
       - ./config/config.toml:/app/config/config.toml:ro
