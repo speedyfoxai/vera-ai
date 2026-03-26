@@ -146,6 +146,111 @@ docker compose up -d
 
 ---
 
+## ⚙️ Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_UID` | `999` | Container user ID (match host) |
+| `APP_GID` | `999` | Container group ID (match host) |
+| `TZ` | `UTC` | Container timezone |
+| `VERA_DEBUG` | `false` | Enable debug logging |
+| `OPENROUTER_API_KEY` | - | Cloud model routing key |
+| `VERA_CONFIG_DIR` | `/app/config` | Config directory |
+| `VERA_PROMPTS_DIR` | `/app/prompts` | Prompts directory |
+| `VERA_LOG_DIR` | `/app/logs` | Debug logs directory |
+
+### config.toml
+
+Create `config/config.toml` with all settings:
+
+```toml
+[general]
+# ═══════════════════════════════════════════════════════════════
+# General Settings
+# ═══════════════════════════════════════════════════════════════
+
+# Ollama server URL
+ollama_host = "http://10.0.0.10:11434"
+
+# Qdrant vector database URL
+qdrant_host = "http://10.0.0.22:6333"
+
+# Collection name for memories
+qdrant_collection = "memories"
+
+# Embedding model for semantic search
+embedding_model = "snowflake-arctic-embed2"
+
+# Enable debug logging (set to true for verbose logs)
+debug = false
+
+[layers]
+# ═══════════════════════════════════════════════════════════════
+# Context Layer Settings
+# ═══════════════════════════════════════════════════════════════
+
+# Token budget for semantic memory layer
+# Controls how much curated memory can be included
+semantic_token_budget = 25000
+
+# Token budget for recent context layer
+# Controls how much recent conversation can be included
+context_token_budget = 22000
+
+# Number of recent turns to include in semantic search
+# Higher = more context, but slower
+semantic_search_turns = 2
+
+# Minimum similarity score for semantic search (0.0-1.0)
+# Higher = more relevant results, but fewer matches
+semantic_score_threshold = 0.6
+
+[curator]
+# ═══════════════════════════════════════════════════════════════
+# Curation Settings
+# ═══════════════════════════════════════════════════════════════
+
+# Time for daily curation (HH:MM format, 24-hour)
+# Processes raw memories from last 24h
+run_time = "02:00"
+
+# Time for monthly full curation (HH:MM format, 24-hour)
+# Processes ALL raw memories
+full_run_time = "03:00"
+
+# Day of month for full curation (1-28)
+full_run_day = 1
+
+# Model to use for curation
+# Should be a capable model for summarization
+curator_model = "gpt-oss:120b"
+```
+
+### prompts/ Directory
+
+Create `prompts/` directory with:
+
+**`prompts/curator_prompt.md`** - Prompt for memory curation:
+```markdown
+You are a memory curator. Your job is to summarize conversation turns 
+into concise Q&A pairs that will be stored for future reference.
+
+Extract the key information and create clear, searchable entries.
+Focus on facts, decisions, and important context.
+```
+
+**`prompts/systemprompt.md`** - System context for Vera:
+```markdown
+You are Vera, an AI with persistent memory. You remember all previous 
+conversations with this user and can reference them contextually.
+
+Use the provided context to give informed, personalized responses.
+```
+
+---
+
 ## 🚀 Quick Start (From Source)
 
 ```bash
@@ -157,15 +262,20 @@ cd vera-ai-v2
 cp .env.example .env
 nano .env                    # Set APP_UID, APP_GID, TZ
 
-# 3. Create directories
+# 3. Create directories and config
 mkdir -p config prompts logs
 cp config.toml config/
+nano config/config.toml     # Set ollama_host, qdrant_host
 
-# 4. Run
+# 4. Create prompts
+nano prompts/curator_prompt.md
+nano prompts/systemprompt.md
+
+# 5. Run
 docker compose build
 docker compose up -d
 
-# 5. Test
+# 6. Test
 curl http://localhost:11434/
 # Expected: {"status":"ok","ollama":"reachable"}
 ```
@@ -183,25 +293,18 @@ cd vera-ai-v2
 
 ### Step 2: Environment Configuration
 
-Create `.env` file (or copy from `.env.example`):
+Create `.env` file:
 
 ```bash
 # User/Group Configuration
-# IMPORTANT: Match these to your host user for volume permissions
-
 APP_UID=1000    # Run: id -u  to get your UID
 APP_GID=1000    # Run: id -g  to get your GID
 
 # Timezone Configuration
-# Affects curator schedule (daily at 02:00, monthly on 1st at 03:00)
-
 TZ=America/Chicago
 
 # Debug Logging
 VERA_DEBUG=false
-
-# Optional: Cloud Model Routing
-# OPENROUTER_API_KEY=your_api_key_here
 ```
 
 ### Step 3: Directory Structure
@@ -220,39 +323,7 @@ ls -la prompts/
 
 ### Step 4: Configure Services
 
-Edit `config/config.toml`:
-
-```toml
-[general]
-# Your Ollama server
-ollama_host = "http://10.0.0.10:11434"
-
-# Your Qdrant server  
-qdrant_host = "http://10.0.0.22:6333"
-qdrant_collection = "memories"
-
-# Embedding model for semantic search
-embedding_model = "snowflake-arctic-embed2"
-debug = false
-
-[layers]
-# Token budgets for context layers
-semantic_token_budget = 25000
-context_token_budget = 22000
-semantic_search_turns = 2
-semantic_score_threshold = 0.6
-
-[curator]
-# Daily curator: processes recent 24h
-run_time = "02:00"
-
-# Monthly curator: processes ALL raw memories
-full_run_time = "03:00"
-full_run_day = 1    # Day of month (1st)
-
-# Model for curation
-curator_model = "gpt-oss:120b"
-```
+Edit `config/config.toml` (see full example above)
 
 ### Step 5: Build and Run
 
@@ -299,22 +370,7 @@ curl -X POST http://localhost:11434/api/chat \
 
 ---
 
-## ⚙️ Configuration Reference
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `APP_UID` | `999` | Container user ID (match host) |
-| `APP_GID` | `999` | Container group ID (match host) |
-| `TZ` | `UTC` | Container timezone |
-| `VERA_DEBUG` | `false` | Enable debug logging |
-| `OPENROUTER_API_KEY` | - | Cloud model routing key |
-| `VERA_CONFIG_DIR` | `/app/config` | Config directory |
-| `VERA_PROMPTS_DIR` | `/app/prompts` | Prompts directory |
-| `VERA_LOG_DIR` | `/app/logs` | Debug logs directory |
-
-### Volume Mappings
+## 📁 Volume Mappings
 
 | Host Path | Container Path | Mode | Purpose |
 |-----------|----------------|------|---------|

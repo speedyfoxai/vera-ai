@@ -56,9 +56,9 @@ docker run -d \
   -e APP_GID=1000 \
   -e TZ=America/Chicago \
   -e VERA_DEBUG=false \
-  -v /path/to/config/config.toml:/app/config/config.toml:ro \
-  -v /path/to/prompts:/app/prompts:rw \
-  -v /path/to/logs:/app/logs:rw \
+  -v ./config/config.toml:/app/config/config.toml:ro \
+  -v ./prompts:/app/prompts:rw \
+  -v ./logs:/app/logs:rw \
   your-username/vera-ai:latest
 ```
 
@@ -82,23 +82,19 @@ services:
       - ./config/config.toml:/app/config/config.toml:ro
       - ./prompts:/app/prompts:rw
       - ./logs:/app/logs:rw
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 ```
 
-Then run:
+Run with:
 
 ```bash
 docker compose up -d
 ```
-
----
-
-## Prerequisites
-
-| Requirement | Description |
-|-------------|-------------|
-| **Ollama** | LLM inference server (e.g., `http://10.0.0.10:11434`) |
-| **Qdrant** | Vector database (e.g., `http://10.0.0.22:6333`) |
-| **Docker** | Docker installed |
 
 ---
 
@@ -119,22 +115,45 @@ Create `config/config.toml`:
 
 ```toml
 [general]
-ollama_host = "http://YOUR_OLLAMA_IP:11434"
-qdrant_host = "http://YOUR_QDRANT_IP:6333"
+# Ollama server URL
+ollama_host = "http://10.0.0.10:11434"
+
+# Qdrant vector database URL
+qdrant_host = "http://10.0.0.22:6333"
+
+# Collection name for memories
 qdrant_collection = "memories"
+
+# Embedding model for semantic search
 embedding_model = "snowflake-arctic-embed2"
+
+# Enable debug logging (set to true for verbose logs)
 debug = false
 
 [layers]
+# Token budget for semantic memory layer
 semantic_token_budget = 25000
+
+# Token budget for recent context layer
 context_token_budget = 22000
+
+# Number of recent turns to include in semantic search
 semantic_search_turns = 2
+
+# Minimum similarity score for semantic search (0.0-1.0)
 semantic_score_threshold = 0.6
 
 [curator]
+# Time for daily curation (HH:MM format)
 run_time = "02:00"
+
+# Time for monthly full curation (HH:MM format)
 full_run_time = "03:00"
+
+# Day of month for full curation (1-28)
 full_run_day = 1
+
+# Model to use for curation
 curator_model = "gpt-oss:120b"
 ```
 
@@ -142,8 +161,47 @@ curator_model = "gpt-oss:120b"
 
 Create `prompts/` directory with:
 
-- `curator_prompt.md` - Prompt for memory curation
-- `systemprompt.md` - System context for Vera
+**`prompts/curator_prompt.md`** - Prompt for memory curation:
+```markdown
+You are a memory curator. Your job is to summarize conversation turns 
+into concise Q&A pairs that will be stored for future reference.
+
+Extract the key information and create clear, searchable entries.
+```
+
+**`prompts/systemprompt.md`** - System context for Vera:
+```markdown
+You are Vera, an AI with persistent memory. You remember all previous 
+conversations with this user and can reference them contextually.
+```
+
+---
+
+## Docker Options Explained
+
+| Option | Description |
+|--------|-------------|
+| `-d` | Run detached (background) |
+| `--name VeraAI` | Container name |
+| `--restart unless-stopped` | Auto-start on boot, survive reboots |
+| `--network host` | Use host network (port 11434) |
+| `-e APP_UID=1000` | User ID (match your host UID) |
+| `-e APP_GID=1000` | Group ID (match your host GID) |
+| `-e TZ=America/Chicago` | Timezone for scheduler |
+| `-e VERA_DEBUG=false` | Disable debug logging |
+| `-v ...config.toml:ro` | Config file (read-only) |
+| `-v ...prompts:rw` | Prompts directory (read-write) |
+| `-v ...logs:rw` | Logs directory (read-write) |
+
+---
+
+## Prerequisites
+
+| Requirement | Description |
+|-------------|-------------|
+| **Ollama** | LLM inference server (e.g., `http://10.0.0.10:11434`) |
+| **Qdrant** | Vector database (e.g., `http://10.0.0.22:6333`) |
+| **Docker** | Docker installed |
 
 ---
 
