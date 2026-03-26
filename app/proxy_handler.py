@@ -23,7 +23,7 @@ def clean_message_content(content: str) -> str:
     if not content:
         return content
     
-    # Check for OpenJarvis/OpenClaw wrapper
+    # Check for memory context wrapper
     wrapper_match = re.search(
         r'\[Memory context\].*?- user_msg:\s*(.+?)(?:\n\n|\Z)',
         content, re.DOTALL

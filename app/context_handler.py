@@ -127,7 +127,7 @@ class ContextHandler:
         }
         
         # === LAYER 1: System Prompt (pass through unchanged) ===
-        # DO NOT truncate - preserve OpenClaw's system prompt entirely
+        # DO NOT truncate - preserve system prompt entirely
         system_content = ""
         if incoming_system:
             system_content = incoming_system.get("content", "")
