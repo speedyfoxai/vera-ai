@@ -67,13 +67,109 @@ Every conversation is stored in Qdrant vector database and retrieved contextuall
 
 ## 📋 Prerequisites
 
-| Requirement | Description |
-|-------------|-------------|
-| **Ollama** | LLM inference server (e.g., `http://10.0.0.10:11434`) |
-| **Qdrant** | Vector database (e.g., `http://10.0.0.22:6333`) |
-| **Docker** | Docker and Docker Compose installed |
-| **Git** | For cloning the repository |
+### Required Services
 
+| Service | Version | Description |
+|---------|---------|-------------|
+| **Ollama** | 0.1.x+ | LLM inference server |
+| **Qdrant** | 1.6.x+ | Vector database |
+| **Docker** | 20.x+ | Container runtime |
+
+### System Requirements
+
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| **CPU** | 2 cores | 4+ cores |
+| **RAM** | 2 GB | 4+ GB |
+| **Disk** | 1 GB | 5+ GB |
+
+---
+
+## 🔧 Installing with Ollama
+
+### Option A: All on Same Host (Recommended)
+
+Install all services on a single machine:
+
+```bash
+# 1. Install Ollama
+curl https://ollama.ai/install.sh | sh
+
+# 2. Pull required models
+ollama pull snowflake-arctic-embed2  # Embedding model (required)
+ollama pull llama3.1                   # Chat model
+
+# 3. Run Qdrant in Docker
+docker run -d --name qdrant -p 6333:6333 qdrant/qdrant
+
+# 4. Run Vera-AI
+docker run -d \
+  --name VeraAI \
+  --restart unless-stopped \
+  --network host \
+  -e APP_UID=$(id -u) \
+  -e APP_GID=$(id -g) \
+  -e TZ=America/Chicago \
+  -v ./config/config.toml:/app/config/config.toml:ro \
+  -v ./prompts:/app/prompts:rw \
+  -v ./logs:/app/logs:rw \
+  your-username/vera-ai:latest
+```
+
+**Config for same-host (config/config.toml):**
+```toml
+[general]
+ollama_host = "http://127.0.0.1:11434"
+qdrant_host = "http://127.0.0.1:6333"
+qdrant_collection = "memories"
+embedding_model = "snowflake-arctic-embed2"
+```
+
+### Option B: Docker Compose All-in-One
+
+```yaml
+services:
+  ollama:
+    image: ollama/ollama
+    ports: ["11434:11434"]
+    volumes: [ollama_data:/root/.ollama]
+
+  qdrant:
+    image: qdrant/qdrant
+    ports: ["6333:6333"]
+    volumes: [qdrant_data:/qdrant/storage]
+
+  vera-ai:
+    image: your-username/vera-ai:latest
+    network_mode: host
+    volumes:
+      - ./config/config.toml:/app/config/config.toml:ro
+      - ./prompts:/app/prompts:rw
+volumes:
+  ollama_data:
+  qdrant_data:
+```
+
+### Option C: Different Port
+
+If Ollama uses port 11434, run Vera on port 8080:
+
+```bash
+docker run -d --name VeraAI -p 8080:11434 ...
+# Connect client to: http://localhost:8080
+```
+
+---
+
+## ✅ Pre-Flight Checklist
+
+- [ ] Docker installed (`docker --version`)
+- [ ] Ollama running (`curl http://localhost:11434/api/tags`)
+- [ ] Qdrant running (`curl http://localhost:6333/collections`)
+- [ ] Embedding model (`ollama pull snowflake-arctic-embed2`)
+- [ ] Chat model (`ollama pull llama3.1`)
+
+---
 ---
 
 ## 🐳 Docker Deployment
