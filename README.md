@@ -1,223 +1,249 @@
-# Vera-AI: Persistent Memory Proxy for Ollama
+<div align="center">
 
-[![Docker](https://img.shields.io/docker/pulls/vera-ai/latest)](https://hub.docker.com/r/vera-ai/latest)
+# Vera-AI
 
-**Vera-AI** is a transparent proxy for Ollama that adds persistent memory using Qdrant vector storage. It sits between your AI client and Ollama, automatically augmenting conversations with relevant context from previous sessions.
+### *Vera* (Latin): **True** — *True AI*
 
-## Features
+**Persistent Memory Proxy for Ollama**
 
-- **Persistent Memory**: Conversations are stored in Qdrant and retrieved contextually
-- **Monthly Curation**: Daily and monthly cleanup of raw memories
-- **4-Layer Context**: System prompt + semantic memory + recent context + current messages
-- **Configurable UID/GID**: Match container user to host user for volume permissions
-- **Timezone Support**: Scheduler runs in your local timezone
-- **Debug Logging**: Optional debug logs written to configurable directory
+*A transparent proxy that gives your AI conversations lasting memory.*
 
-## Prerequisites
+[![Docker](https://img.shields.io/docker/pulls/vera-ai/latest?style=for-the-badge)](https://hub.docker.com/r/vera-ai/latest)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![Gitea](https://img.shields.io/badge/repo-Gitea-orange?style=for-the-badge)](http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2)
 
-- **Ollama**: Running LLM inference server (e.g., `http://10.0.0.10:11434`)
-- **Qdrant**: Running vector database (e.g., `http://10.0.0.22:6333`)
-- **Docker**: Docker and Docker Compose installed
-- **Git**: For cloning the repository
+---
 
-## Quick Start
+**Vera-AI sits between your AI client and Ollama, automatically augmenting conversations with relevant context from previous sessions.**
+
+Every conversation is stored in Qdrant vector database and retrieved contextually — giving your AI **true memory**.
+
+</div>
+
+---
+
+## 🌟 Features
+
+| Feature | Description |
+|---------|-------------|
+| **🧠 Persistent Memory** | Conversations stored in Qdrant, retrieved contextually |
+| **📅 Monthly Curation** | Daily + monthly cleanup of raw memories |
+| **🔍 4-Layer Context** | System + semantic + recent + current messages |
+| **👤 Configurable UID/GID** | Match container user to host for permissions |
+| **🌍 Timezone Support** | Scheduler runs in your local timezone |
+| **📝 Debug Logging** | Optional logs written to configurable directory |
+| **🐳 Docker Ready** | One-command build and run |
+
+## 📋 Prerequisites
+
+| Requirement | Description |
+|-------------|-------------|
+| **Ollama** | LLM inference server (e.g., `http://10.0.0.10:11434`) |
+| **Qdrant** | Vector database (e.g., `http://10.0.0.22:6333`) |
+| **Docker** | Docker and Docker Compose installed |
+| **Git** | For cloning the repository |
+
+## 🚀 Quick Start
 
 ```bash
-# Clone the repository
+# 1. Clone
 git clone http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2.git
 cd vera-ai-v2
 
-# Create environment file from template
+# 2. Configure
 cp .env.example .env
+nano .env                    # Set APP_UID, APP_GID, TZ
 
-# Edit .env with your settings
-nano .env
-
-# Create required directories
+# 3. Create directories
 mkdir -p config prompts logs
-
-# Copy default config (or create your own)
 cp config.toml config/
 
-# Build and run
+# 4. Run
 docker compose build
 docker compose up -d
 
-# Test
+# 5. Test
 curl http://localhost:11434/
+# Expected: {"status":"ok","ollama":"reachable"}
 ```
 
-## Full Setup Instructions
+## 📖 Full Setup Guide
 
-### 1. Clone Repository
+### Step 1: Clone Repository
 
 ```bash
 git clone http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2.git
 cd vera-ai-v2
 ```
 
-### 2. Create Environment File
+### Step 2: Environment Configuration
 
 Create `.env` file (or copy from `.env.example`):
 
 ```bash
-# User/Group Configuration (match your host user)
-APP_UID=1000
-APP_GID=1000
+# ═══════════════════════════════════════════════════════════════
+# User/Group Configuration
+# ═══════════════════════════════════════════════════════════════
+# IMPORTANT: Match these to your host user for volume permissions
 
+APP_UID=1000    # Run: id -u  to get your UID
+APP_GID=1000    # Run: id -g  to get your GID
+
+# ═══════════════════════════════════════════════════════════════
 # Timezone Configuration
+# ═══════════════════════════════════════════════════════════════
+# Affects curator schedule (daily at 02:00, monthly on 1st at 03:00)
+
 TZ=America/Chicago
 
-# API Keys (optional)
+# ═══════════════════════════════════════════════════════════════
+# Optional: Cloud Model Routing
+# ═══════════════════════════════════════════════════════════════
 # OPENROUTER_API_KEY=your_api_key_here
 ```
 
-**Important:** `APP_UID` and `APP_GID` must match your host user's UID/GID for volume permissions:
+### Step 3: Directory Structure
 
 ```bash
-# Get your UID and GID
-id -u   # UID
-id -g   # GID
-
-# Set in .env
-APP_UID=1000  # Replace with your UID
-APP_GID=1000  # Replace with your GID
-```
-
-### 3. Create Required Directories
-
-```bash
-# Create directories
+# Create required directories
 mkdir -p config prompts logs
 
 # Copy default configuration
 cp config.toml config/
 
-# Verify prompts exist (should be in the repo)
+# Verify prompts exist
 ls -la prompts/
 # Should show: curator_prompt.md, systemprompt.md
 ```
 
-### 4. Configure Ollama and Qdrant
+### Step 4: Configure Services
 
 Edit `config/config.toml`:
 
 ```toml
 [general]
-ollama_host = "http://YOUR_OLLAMA_IP:11434"
-qdrant_host = "http://YOUR_QDRANT_IP:6333"
+# Your Ollama server
+ollama_host = "http://10.0.0.10:11434"
+
+# Your Qdrant server  
+qdrant_host = "http://10.0.0.22:6333"
 qdrant_collection = "memories"
+
+# Embedding model for semantic search
 embedding_model = "snowflake-arctic-embed2"
 debug = false
 
 [layers]
+# Token budgets for context layers
 semantic_token_budget = 25000
 context_token_budget = 22000
 semantic_search_turns = 2
 semantic_score_threshold = 0.6
 
 [curator]
-run_time = "02:00"           # Daily curator time
-full_run_time = "03:00"      # Monthly full curator time
-full_run_day = 1             # Day of month (1st)
+# Daily curator: processes recent 24h
+run_time = "02:00"
+
+# Monthly curator: processes ALL raw memories
+full_run_time = "03:00"
+full_run_day = 1    # Day of month (1st)
+
+# Model for curation
 curator_model = "gpt-oss:120b"
 ```
 
-### 5. Build and Run
+### Step 5: Build and Run
 
 ```bash
 # Build with your UID/GID
 APP_UID=$(id -u) APP_GID=$(id -g) docker compose build
 
-# Run with timezone
+# Start container
 docker compose up -d
 
 # Check status
 docker ps
 docker logs vera-ai --tail 20
-
-# Test health endpoint
-curl http://localhost:11434/
-# Expected: {"status":"ok","ollama":"reachable"}
 ```
 
-### 6. Verify Installation
+### Step 6: Verify Installation
 
 ```bash
-# Check container is healthy
+# ✅ Health check
+curl http://localhost:11434/
+# Expected: {"status":"ok","ollama":"reachable"}
+
+# ✅ Container status
 docker ps --format "table {{.Names}}\t{{.Status}}"
 # Expected: vera-ai   Up X minutes (healthy)
 
-# Check timezone
+# ✅ Timezone
 docker exec vera-ai date
 # Should show your timezone (e.g., CDT for America/Chicago)
 
-# Check user
+# ✅ User permissions
 docker exec vera-ai id
 # Expected: uid=1000(appuser) gid=1000(appgroup)
 
-# Check directories
+# ✅ Directories
 docker exec vera-ai ls -la /app/prompts/
 # Should show: curator_prompt.md, systemprompt.md
 
-docker exec vera-ai ls -la /app/logs/
-# Should be writable
-
-# Test chat
+# ✅ Test chat
 curl -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"model":"YOUR_MODEL","messages":[{"role":"user","content":"hello"}],"stream":false}'
+  -d '{"model":"qwen3.5:397b-cloud","messages":[{"role":"user","content":"hello"}],"stream":false}'
 ```
 
-## Configuration
+## ⚙️ Configuration Reference
 
-### Environment Variables (.env)
+### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `APP_UID` | `999` | User ID for container user (match your host UID) |
-| `APP_GID` | `999` | Group ID for container group (match your host GID) |
-| `TZ` | `UTC` | Timezone for scheduler |
-| `OPENROUTER_API_KEY` | - | API key for cloud model routing (optional) |
-| `VERA_CONFIG_DIR` | `/app/config` | Configuration directory (optional) |
-| `VERA_PROMPTS_DIR` | `/app/prompts` | Prompts directory (optional) |
-| `VERA_LOG_DIR` | `/app/logs` | Debug log directory (optional) |
+| `APP_UID` | `999` | Container user ID (match host) |
+| `APP_GID` | `999` | Container group ID (match host) |
+| `TZ` | `UTC` | Container timezone |
+| `OPENROUTER_API_KEY` | - | Cloud model routing key |
+| `VERA_CONFIG_DIR` | `/app/config` | Config directory |
+| `VERA_PROMPTS_DIR` | `/app/prompts` | Prompts directory |
+| `VERA_LOG_DIR` | `/app/logs` | Debug logs directory |
 
 ### Volume Mappings
 
 | Host Path | Container Path | Mode | Purpose |
-|-----------|---------------|------|---------|
-| `./config/config.toml` | `/app/config/config.toml` | `ro` | Configuration file |
-| `./prompts/` | `/app/prompts/` | `rw` | Curator and system prompts |
-| `./logs/` | `/app/logs/` | `rw` | Debug logs (when debug=true) |
+|-----------|----------------|------|---------|
+| `./config/config.toml` | `/app/config/config.toml` | `ro` | Configuration |
+| `./prompts/` | `/app/prompts/` | `rw` | Curator prompts |
+| `./logs/` | `/app/logs/` | `rw` | Debug logs |
 
 ### Directory Structure
 
 ```
 vera-ai-v2/
-├── config/
-│   └── config.toml       # Main configuration (mounted read-only)
-├── prompts/
-│   ├── curator_prompt.md # Prompt for memory curator
-│   └── systemprompt.md   # System context (curator can append)
-├── logs/                 # Debug logs (when debug=true)
-├── app/
-│   ├── main.py           # FastAPI application
-│   ├── config.py         # Configuration loading
-│   ├── curator.py        # Memory curation
-│   ├── proxy_handler.py  # Chat request handling
-│   ├── qdrant_service.py # Qdrant operations
-│   ├── singleton.py      # QdrantService singleton
-│   └── utils.py          # Utilities
-├── static/               # Legacy (symlinks to prompts/)
-├── .env.example          # Environment template
-├── docker-compose.yml    # Docker Compose config
-├── Dockerfile            # Container definition
-├── requirements.txt      # Python dependencies
-└── README.md             # This file
+├── 📁 config/
+│   └── 📄 config.toml        # Main configuration
+├── 📁 prompts/
+│   ├── 📄 curator_prompt.md  # Memory curation prompt
+│   └── 📄 systemprompt.md    # System context
+├── 📁 logs/                  # Debug logs (when debug=true)
+├── 📁 app/
+│   ├── 🐍 main.py            # FastAPI application
+│   ├── 🐍 config.py          # Configuration loader
+│   ├── 🐍 curator.py         # Memory curation
+│   ├── 🐍 proxy_handler.py  # Chat handling
+│   ├── 🐍 qdrant_service.py # Vector operations
+│   ├── 🐍 singleton.py      # QdrantService singleton
+│   └── 🐍 utils.py          # Utilities
+├── 📁 static/               # Legacy symlinks
+├── 📄 .env.example          # Environment template
+├── 📄 docker-compose.yml    # Docker Compose
+├── 📄 Dockerfile            # Container definition
+├── 📄 requirements.txt      # Python dependencies
+└── 📄 README.md             # This file
 ```
 
-## Docker Compose
+## 🐳 Docker Compose
 
 ```yaml
 services:
@@ -233,8 +259,11 @@ services:
     env_file:
       - .env
     volumes:
+      # Configuration (read-only)
       - ./config/config.toml:/app/config/config.toml:ro
+      # Prompts (read-write for curator)
       - ./prompts:/app/prompts:rw
+      # Debug logs (read-write)
       - ./logs:/app/logs:rw
     network_mode: "host"
     restart: unless-stopped
@@ -246,37 +275,36 @@ services:
       start_period: 10s
 ```
 
-## Timezone Configuration
+## 🌍 Timezone Configuration
 
-The `TZ` environment variable sets the container timezone, which affects the scheduler:
+The `TZ` variable sets the container timezone for the scheduler:
 
 ```bash
-# .env file
-TZ=America/Chicago
-
-# Scheduler runs at:
-# - Daily curator: 02:00 Chicago time
-# - Monthly curator: 03:00 Chicago time on 1st
+# Common timezones
+TZ=UTC                 # Coordinated Universal Time
+TZ=America/New_York    # Eastern Time
+TZ=America/Chicago     # Central Time
+TZ=America/Los_Angeles # Pacific Time
+TZ=Europe/London       # GMT/BST
 ```
 
-Common timezones:
-- `UTC` - Coordinated Universal Time
-- `America/New_York` - Eastern Time
-- `America/Chicago` - Central Time
-- `America/Los_Angeles` - Pacific Time
-- `Europe/London` - GMT/BST
+**Curation Schedule:**
+| Schedule | Time | What | Frequency |
+|----------|------|------|-----------|
+| Daily | 02:00 | Recent 24h | Every day |
+| Monthly | 03:00 on 1st | ALL raw memories | 1st of month |
 
-## API Endpoints
+## 🔌 API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Health check |
-| `/api/chat` | POST | Chat completion (augmented with memory) |
-| `/api/tags` | GET | List models |
-| `/api/generate` | POST | Generate completion |
-| `/curator/run` | POST | Trigger curator manually |
+| `/` | `GET` | Health check |
+| `/api/chat` | `POST` | Chat completion (with memory) |
+| `/api/tags` | `GET` | List available models |
+| `/api/generate` | `POST` | Generate completion |
+| `/curator/run` | `POST` | Trigger curator manually |
 
-## Manual Curator Trigger
+### Manual Curation
 
 ```bash
 # Daily curation (recent 24h)
@@ -286,119 +314,132 @@ curl -X POST http://localhost:11434/curator/run
 curl -X POST "http://localhost:11434/curator/run?full=true"
 ```
 
-## Memory System
+## 🧠 Memory System
 
 ### 4-Layer Context
 
-1. **System Prompt**: From `prompts/systemprompt.md`
-2. **Semantic Memory**: Curated Q&A pairs retrieved by relevance
-3. **Recent Context**: Last N conversation turns
-4. **Current Messages**: User/assistant messages from request
-
-### Curation Schedule
-
-| Schedule | Time | What | Frequency |
-|----------|------|------|-----------|
-| Daily | 02:00 | Recent 24h raw memories | Every day |
-| Monthly | 03:00 on 1st | ALL raw memories | 1st of month |
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 1: System Prompt                                      │
+│   - From prompts/systemprompt.md                            │
+│   - Static context, curator can append rules                │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 2: Semantic Memory                                    │
+│   - Curated Q&A pairs from Qdrant                           │
+│   - Retrieved by relevance to current message               │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 3: Recent Context                                     │
+│   - Last N conversation turns from Qdrant                   │
+│   - Chronological order                                      │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 4: Current Messages                                   │
+│   - User/assistant messages from current request            │
+│   - Passed through unchanged                                │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ### Memory Types
 
-- **raw**: Unprocessed conversation turns
-- **curated**: Cleaned, summarized Q&A pairs
-- **test**: Test entries (can be ignored)
+| Type | Description | Retention |
+|------|-------------|-----------|
+| `raw` | Unprocessed conversation turns | Until curation |
+| `curated` | Cleaned Q&A pairs | Permanent |
+| `test` | Test entries | Can be ignored |
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
 ### Permission Denied
-
-If you see permission errors on `/app/prompts/` or `/app/logs/`:
 
 ```bash
 # Check your UID/GID
 id
 
-# Rebuild with correct UID/GID
+# Rebuild with correct values
 APP_UID=$(id -u) APP_GID=$(id -g) docker compose build --no-cache
 docker compose up -d
 ```
 
-### Timezone Issues
-
-If curator runs at wrong time:
+### Wrong Timezone
 
 ```bash
-# Check container timezone
+# Check container time
 docker exec vera-ai date
 
-# Set correct timezone in .env
+# Fix in .env
 TZ=America/Chicago
 ```
 
 ### Health Check Failing
 
 ```bash
-# Check container logs
+# Check logs
 docker logs vera-ai --tail 50
 
-# Check Ollama connectivity
-docker exec vera-ai python -c "import urllib.request; print(urllib.request.urlopen('http://YOUR_OLLAMA_IP:11434/').read())"
+# Test Ollama connectivity
+docker exec vera-ai python -c "
+import urllib.request
+print(urllib.request.urlopen('http://YOUR_OLLAMA_IP:11434/').read())
+"
 
-# Check Qdrant connectivity
-docker exec vera-ai python -c "import urllib.request; print(urllib.request.urlopen('http://YOUR_QDRANT_IP:6333/').read())"
+# Test Qdrant connectivity
+docker exec vera-ai python -c "
+import urllib.request
+print(urllib.request.urlopen('http://YOUR_QDRANT_IP:6333/').read())
+"
 ```
 
-### Container Not Starting
+### Port Already in Use
 
 ```bash
-# Check if port is in use
+# Check what's using port 11434
 sudo lsof -i :11434
 
-# Check Docker logs
-docker compose logs
-
-# Rebuild from scratch
-docker compose down
-docker compose build --no-cache
-docker compose up -d
+# Stop conflicting service or change port in config
 ```
 
-## Development
+## 🛠️ Development
 
-### Building from Source
+### Build from Source
 
 ```bash
-# Clone repository
 git clone http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2.git
 cd vera-ai-v2
-
-# Install dependencies locally (optional)
 pip install -r requirements.txt
-
-# Build Docker image
 docker compose build
 ```
 
-### Running Tests
+### Run Tests
 
 ```bash
-# Test health endpoint
+# Health check
 curl http://localhost:11434/
 
-# Test chat endpoint
+# Non-streaming chat
 curl -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen3.5:397b-cloud","messages":[{"role":"user","content":"test"}],"stream":false}'
 
-# Test curator
+# Trigger curation
 curl -X POST http://localhost:11434/curator/run
 ```
 
-## License
+## 📄 License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## Support
+## 🤝 Support
 
-- **Issues**: http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2/issues
-- **Repository**: http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2
+| Resource | Link |
+|----------|------|
+| **Repository** | http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2 |
+| **Issues** | http://10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2/issues |
+
+---
+
+<div align="center">
+
+**Vera-AI** — *True AI Memory*
+
+Made with ❤️ by the OpenClaw team
+
+</div>
