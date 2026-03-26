@@ -49,77 +49,6 @@ Every conversation is stored in Qdrant vector database and retrieved contextuall
                        │ Memory   │
                        │ Storage  │
                        └──────────┘
-
-
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           4-LAYER CONTEXT BUILD                                  │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-    Incoming Request (POST /api/chat)
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 1: System Prompt                                                      │
-    │   • Static context from prompts/systemprompt.md                            │
-    │   • Preserved unchanged, passed through                                      │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 2: Semantic Memory                                                    │
-    │   • Query Qdrant with user question                                         │
-    │   • Retrieve curated Q&A pairs by relevance                                 │
-    │   • Limited by semantic_token_budget                                        │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 3: Recent Context                                                     │
-    │   • Last N conversation turns from Qdrant                                   │
-    │   • Chronological order, recent memories first                              │
-    │   • Limited by context_token_budget                                         │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 4: Current Messages                                                    │
-    │   • User message from current request                                       │
-    │   • Passed through unchanged                                                │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-         [augmented request] ──▶ Ollama LLM ──▶ Response
-
-
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           MEMORY STORAGE FLOW                                    │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-    User Question + Assistant Response
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Store as "raw" memory in Qdrant                                             │
-    │   • User ID, role, content, timestamp                                       │
-    │   • Embedded using configured embedding model                               │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Daily Curator (02:00)                                                        │
-    │   • Processes raw memories from last 24h                                    │
-    │   • Summarizes into curated Q&A pairs                                      │
-    │   • Stores as "curated" memories                                            │
-    │   • Deletes processed raw memories                                          │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Monthly Curator (03:00 on 1st)                                              │
-    │   • Processes ALL remaining raw memories                                    │
-    │   • Full database cleanup                                                   │
-    │   • Ensures no memories are orphaned                                        │
-    └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -145,7 +74,79 @@ Every conversation is stored in Qdrant vector database and retrieved contextuall
 | **Docker** | Docker and Docker Compose installed |
 | **Git** | For cloning the repository |
 
-## 🚀 Quick Start
+---
+
+## 🐳 Docker Deployment
+
+### Option 1: Docker Run (Single Command)
+
+```bash
+docker run -d \
+  --name VeraAI \
+  --restart unless-stopped \
+  --network host \
+  -e APP_UID=1000 \
+  -e APP_GID=1000 \
+  -e TZ=America/Chicago \
+  -e VERA_DEBUG=false \
+  -v ./config/config.toml:/app/config/config.toml:ro \
+  -v ./prompts:/app/prompts:rw \
+  -v ./logs:/app/logs:rw \
+  your-username/vera-ai:latest
+```
+
+### Option 2: Docker Compose
+
+Create `docker-compose.yml`:
+
+```yaml
+services:
+  vera-ai:
+    image: your-username/vera-ai:latest
+    container_name: VeraAI
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - APP_UID=1000
+      - APP_GID=1000
+      - TZ=America/Chicago
+      - VERA_DEBUG=false
+    volumes:
+      - ./config/config.toml:/app/config/config.toml:ro
+      - ./prompts:/app/prompts:rw
+      - ./logs:/app/logs:rw
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+```
+
+Run with:
+
+```bash
+docker compose up -d
+```
+
+### Docker Options Explained
+
+| Option | Description |
+|--------|-------------|
+| `-d` | Run detached (background) |
+| `--name VeraAI` | Container name |
+| `--restart unless-stopped` | Auto-start on boot, survive reboots |
+| `--network host` | Use host network (port 11434) |
+| `-e APP_UID=1000` | User ID (match your host UID) |
+| `-e APP_GID=1000` | Group ID (match your host GID) |
+| `-e TZ=America/Chicago` | Timezone for scheduler |
+| `-e VERA_DEBUG=false` | Disable debug logging |
+| `-v ...:ro` | Config file (read-only) |
+| `-v ...:rw` | Prompts and logs (read-write) |
+
+---
+
+## 🚀 Quick Start (From Source)
 
 ```bash
 # 1. Clone
@@ -168,6 +169,8 @@ docker compose up -d
 curl http://localhost:11434/
 # Expected: {"status":"ok","ollama":"reachable"}
 ```
+
+---
 
 ## 📖 Full Setup Guide
 
@@ -193,6 +196,9 @@ APP_GID=1000    # Run: id -g  to get your GID
 # Affects curator schedule (daily at 02:00, monthly on 1st at 03:00)
 
 TZ=America/Chicago
+
+# Debug Logging
+VERA_DEBUG=false
 
 # Optional: Cloud Model Routing
 # OPENROUTER_API_KEY=your_api_key_here
@@ -259,7 +265,7 @@ docker compose up -d
 
 # Check status
 docker ps
-docker logs vera-ai --tail 20
+docker logs VeraAI --tail 20
 ```
 
 ### Step 6: Verify Installation
@@ -271,18 +277,18 @@ curl http://localhost:11434/
 
 # Container status
 docker ps --format "table {{.Names}}\t{{.Status}}"
-# Expected: vera-ai   Up X minutes (healthy)
+# Expected: VeraAI   Up X minutes (healthy)
 
 # Timezone
-docker exec vera-ai date
+docker exec VeraAI date
 # Should show your timezone (e.g., CDT for America/Chicago)
 
 # User permissions
-docker exec vera-ai id
+docker exec VeraAI id
 # Expected: uid=1000(appuser) gid=1000(appgroup)
 
 # Directories
-docker exec vera-ai ls -la /app/prompts/
+docker exec VeraAI ls -la /app/prompts/
 # Should show: curator_prompt.md, systemprompt.md
 
 # Test chat
@@ -290,6 +296,8 @@ curl -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen3.5:397b-cloud","messages":[{"role":"user","content":"hello"}],"stream":false}'
 ```
+
+---
 
 ## ⚙️ Configuration Reference
 
@@ -300,6 +308,7 @@ curl -X POST http://localhost:11434/api/chat \
 | `APP_UID` | `999` | Container user ID (match host) |
 | `APP_GID` | `999` | Container group ID (match host) |
 | `TZ` | `UTC` | Container timezone |
+| `VERA_DEBUG` | `false` | Enable debug logging |
 | `OPENROUTER_API_KEY` | - | Cloud model routing key |
 | `VERA_CONFIG_DIR` | `/app/config` | Config directory |
 | `VERA_PROMPTS_DIR` | `/app/prompts` | Prompts directory |
@@ -339,37 +348,7 @@ vera-ai-v2/
 └── README.md              # This file
 ```
 
-## 🐳 Docker Compose
-
-```yaml
-services:
-  vera-ai:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_UID: ${APP_UID:-999}
-        APP_GID: ${APP_GID:-999}
-    image: vera-ai:latest
-    container_name: vera-ai
-    env_file:
-      - .env
-    volumes:
-      # Configuration (read-only)
-      - ./config/config.toml:/app/config/config.toml:ro
-      # Prompts (read-write for curator)
-      - ./prompts:/app/prompts:rw
-      # Debug logs (read-write)
-      - ./logs:/app/logs:rw
-    network_mode: "host"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-```
+---
 
 ## 🌍 Timezone Configuration
 
@@ -389,6 +368,8 @@ TZ=Europe/London        # GMT/BST
 |----------|------|------|-----------|
 | Daily | 02:00 | Recent 24h | Every day |
 | Monthly | 03:00 on 1st | ALL raw memories | 1st of month |
+
+---
 
 ## 🔌 API Endpoints
 
@@ -410,7 +391,33 @@ curl -X POST http://localhost:11434/curator/run
 curl -X POST "http://localhost:11434/curator/run?full=true"
 ```
 
+---
+
 ## 🧠 Memory System
+
+### 4-Layer Context Build
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 1: System Prompt                                      │
+│   • From prompts/systemprompt.md                            │
+│   • Preserved unchanged, passed through                     │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 2: Semantic Memory                                    │
+│   • Query Qdrant with user question                         │
+│   • Retrieve curated Q&A pairs by relevance                 │
+│   • Limited by semantic_token_budget                        │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 3: Recent Context                                     │
+│   • Last N conversation turns from Qdrant                   │
+│   • Chronological order, recent memories first              │
+│   • Limited by context_token_budget                         │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 4: Current Messages                                   │
+│   • User message from current request                       │
+│   • Passed through unchanged                                │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ### Memory Types
 
@@ -424,6 +431,8 @@ curl -X POST "http://localhost:11434/curator/run?full=true"
 
 1. **Daily (02:00)**: Processes raw memories from last 24h into curated Q&A pairs
 2. **Monthly (03:00 on 1st)**: Processes ALL remaining raw memories for full cleanup
+
+---
 
 ## 🔧 Troubleshooting
 
@@ -442,7 +451,7 @@ docker compose up -d
 
 ```bash
 # Check container time
-docker exec vera-ai date
+docker exec VeraAI date
 
 # Fix in .env
 TZ=America/Chicago
@@ -452,16 +461,16 @@ TZ=America/Chicago
 
 ```bash
 # Check logs
-docker logs vera-ai --tail 50
+docker logs VeraAI --tail 50
 
 # Test Ollama connectivity
-docker exec vera-ai python -c "
+docker exec VeraAI python -c "
 import urllib.request
 print(urllib.request.urlopen('http://YOUR_OLLAMA_IP:11434/').read())
 "
 
 # Test Qdrant connectivity
-docker exec vera-ai python -c "
+docker exec VeraAI python -c "
 import urllib.request
 print(urllib.request.urlopen('http://YOUR_QDRANT_IP:6333/').read())
 "
@@ -475,6 +484,8 @@ sudo lsof -i :11434
 
 # Stop conflicting service or change port in config
 ```
+
+---
 
 ## 🛠️ Development
 
@@ -502,9 +513,13 @@ curl -X POST http://localhost:11434/api/chat \
 curl -X POST http://localhost:11434/curator/run
 ```
 
+---
+
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+---
 
 ## 🤝 Support
 

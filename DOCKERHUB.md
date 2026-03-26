@@ -39,92 +39,66 @@ Vera-AI is a transparent proxy for Ollama that adds persistent memory using Qdra
                        │ Memory   │
                        │ Storage  │
                        └──────────┘
-
-
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           4-LAYER CONTEXT BUILD                                  │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-    Incoming Request (POST /api/chat)
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 1: System Prompt                                                      │
-    │   • Static context from prompts/systemprompt.md                            │
-    │   • Preserved unchanged, passed through                                      │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 2: Semantic Memory                                                    │
-    │   • Query Qdrant with user question                                         │
-    │   • Retrieve curated Q&A pairs by relevance                                 │
-    │   • Limited by semantic_token_budget                                        │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 3: Recent Context                                                     │
-    │   • Last N conversation turns from Qdrant                                   │
-    │   • Chronological order, recent memories first                              │
-    │   • Limited by context_token_budget                                         │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-    ┌─────────────────────────────────────────────────────────────────────────────┐
-    │ Layer 4: Current Messages                                                    │
-    │   • User message from current request                                       │
-    │   • Passed through unchanged                                                │
-    └─────────────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-         [augmented request] ──▶ Ollama LLM ──▶ Response
 ```
 
 ---
 
 ## Quick Start
 
+### Option 1: Docker Run (Single Command)
+
 ```bash
-# Pull the image
-docker pull YOUR_USERNAME/vera-ai:latest
-
-# Create directories
-mkdir -p config prompts logs
-
-# Create environment file
-cat > .env << EOF
-APP_UID=$(id -u)
-APP_GID=$(id -g)
-TZ=America/Chicago
-EOF
-
-# Run
 docker run -d \
-  --name vera-ai \
-  --env-file .env \
-  -v ./config/config.toml:/app/config/config.toml:ro \
-  -v ./prompts:/app/prompts:rw \
-  -v ./logs:/app/logs:rw \
+  --name VeraAI \
+  --restart unless-stopped \
   --network host \
-  YOUR_USERNAME/vera-ai:latest
+  -e APP_UID=1000 \
+  -e APP_GID=1000 \
+  -e TZ=America/Chicago \
+  -e VERA_DEBUG=false \
+  -v /path/to/config/config.toml:/app/config/config.toml:ro \
+  -v /path/to/prompts:/app/prompts:rw \
+  -v /path/to/logs:/app/logs:rw \
+  your-username/vera-ai:latest
+```
 
-# Test
-curl http://localhost:11434/
+### Option 2: Docker Compose
+
+Create `docker-compose.yml`:
+
+```yaml
+services:
+  vera-ai:
+    image: your-username/vera-ai:latest
+    container_name: VeraAI
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - APP_UID=1000
+      - APP_GID=1000
+      - TZ=America/Chicago
+      - VERA_DEBUG=false
+    volumes:
+      - ./config/config.toml:/app/config/config.toml:ro
+      - ./prompts:/app/prompts:rw
+      - ./logs:/app/logs:rw
+```
+
+Then run:
+
+```bash
+docker compose up -d
 ```
 
 ---
 
-## Features
+## Prerequisites
 
-| Feature | Description |
-|---------|-------------|
-| 🧠 **Persistent Memory** | Conversations stored in Qdrant, retrieved contextually |
-| 📅 **Monthly Curation** | Daily + monthly cleanup of raw memories |
-| 🔍 **4-Layer Context** | System + semantic + recent + current messages |
-| 👤 **Configurable UID/GID** | Match container user to host for permissions |
-| 🌍 **Timezone Support** | Scheduler runs in your local timezone |
-| 📝 **Debug Logging** | Optional logs written to configurable directory |
+| Requirement | Description |
+|-------------|-------------|
+| **Ollama** | LLM inference server (e.g., `http://10.0.0.10:11434`) |
+| **Qdrant** | Vector database (e.g., `http://10.0.0.22:6333`) |
+| **Docker** | Docker installed |
 
 ---
 
@@ -137,16 +111,11 @@ curl http://localhost:11434/
 | `APP_UID` | `999` | Container user ID (match your host UID) |
 | `APP_GID` | `999` | Container group ID (match your host GID) |
 | `TZ` | `UTC` | Container timezone |
-| `VERA_CONFIG_DIR` | `/app/config` | Config directory |
-| `VERA_PROMPTS_DIR` | `/app/prompts` | Prompts directory |
-| `VERA_LOG_DIR` | `/app/logs` | Debug logs directory |
+| `VERA_DEBUG` | `false` | Enable debug logging |
 
-### Required Services
+### config.toml
 
-- **Ollama**: LLM inference server
-- **Qdrant**: Vector database for memory storage
-
-### Example config.toml
+Create `config/config.toml`:
 
 ```toml
 [general]
@@ -163,54 +132,31 @@ semantic_search_turns = 2
 semantic_score_threshold = 0.6
 
 [curator]
-run_time = "02:00"           # Daily curator
-full_run_time = "03:00"      # Monthly curator
-full_run_day = 1             # Day of month (1st)
+run_time = "02:00"
+full_run_time = "03:00"
+full_run_day = 1
 curator_model = "gpt-oss:120b"
 ```
 
----
+### prompts/ Directory
 
-## Docker Compose
+Create `prompts/` directory with:
 
-```yaml
-services:
-  vera-ai:
-    image: YOUR_USERNAME/vera-ai:latest
-    container_name: vera-ai
-    env_file:
-      - .env
-    volumes:
-      - ./config/config.toml:/app/config/config.toml:ro
-      - ./prompts:/app/prompts:rw
-      - ./logs:/app/logs:rw
-    network_mode: "host"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-```
+- `curator_prompt.md` - Prompt for memory curation
+- `systemprompt.md` - System context for Vera
 
 ---
 
-## Memory System
+## Features
 
-### 4-Layer Context
-
-1. **System Prompt** - From `prompts/systemprompt.md`
-2. **Semantic Memory** - Curated Q&A retrieved by relevance
-3. **Recent Context** - Last N conversation turns
-4. **Current Messages** - User/assistant from request
-
-### Curation Schedule
-
-| Schedule | Time | What |
-|----------|------|------|
-| Daily | 02:00 | Recent 24h raw memories |
-| Monthly | 03:00 on 1st | ALL raw memories |
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Persistent Memory** | Conversations stored in Qdrant, retrieved contextually |
+| 📅 **Monthly Curation** | Daily + monthly cleanup of raw memories |
+| 🔍 **4-Layer Context** | System + semantic + recent + current messages |
+| 👤 **Configurable UID/GID** | Match container user to host for permissions |
+| 🌍 **Timezone Support** | Scheduler runs in your local timezone |
+| 📝 **Debug Logging** | Optional logs written to configurable directory |
 
 ---
 
@@ -221,7 +167,26 @@ services:
 | `/` | `GET` | Health check |
 | `/api/chat` | `POST` | Chat completion (with memory) |
 | `/api/tags` | `GET` | List models |
-| `/curator/run` | `POST` | Trigger curator |
+| `/curator/run` | `POST` | Trigger curator manually |
+
+---
+
+## Verify Installation
+
+```bash
+# Health check
+curl http://localhost:11434/
+# Expected: {"status":"ok","ollama":"reachable"}
+
+# Check container
+docker ps
+# Expected: VeraAI running with (healthy) status
+
+# Test chat
+curl -X POST http://localhost:11434/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"model":"your-model","messages":[{"role":"user","content":"hello"}],"stream":false}'
+```
 
 ---
 
@@ -233,18 +198,15 @@ services:
 # Get your UID/GID
 id
 
-# Set in .env
-APP_UID=1000
-APP_GID=1000
-
-# Rebuild
-docker compose build --no-cache
+# Set in environment
+APP_UID=$(id -u)
+APP_GID=$(id -g)
 ```
 
 ### Wrong Timezone
 
 ```bash
-# Set in .env
+# Set correct timezone
 TZ=America/Chicago
 ```
 
