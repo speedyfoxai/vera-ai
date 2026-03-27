@@ -2,18 +2,15 @@
 ollama_host = "http://10.0.0.10:11434"
 qdrant_host = "http://10.0.0.22:6333"
 qdrant_collection = "memories"
-embedding_model = "snowflake-arctic-embed2"
+embedding_model = "mxbai-embed-large"
 debug = false
 
 [layers]
-# Note: system_token_budget removed - system prompt is never truncated
 semantic_token_budget = 25000
 context_token_budget = 22000
 semantic_search_turns = 2
-semantic_score_threshold = 0.6
+semantic_score_threshold = 0.3
 
 [curator]
-# Daily curation: processes recent 24h of raw memories
-# Monthly mode is detected automatically by curator_prompt.md (day 01)
 run_time = "02:00"
 curator_model = "gpt-oss:120b"
