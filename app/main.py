@@ -20,25 +20,19 @@ curator = None
 
 
 async def run_curator():
-    """Scheduled daily curator job (recent 24h)."""
+    """Scheduled daily curator job.
+    
+    Runs every day at configured time. The curator itself detects
+    if it's day 01 (monthly mode) and processes all memories.
+    Otherwise processes recent 24h only.
+    """
     global curator
-    logger.info("Starting daily memory curation...")
+    logger.info("Starting memory curation...")
     try:
-        await curator.run_daily()
-        logger.info("Daily memory curation completed successfully")
+        await curator.run()
+        logger.info("Memory curation completed successfully")
     except Exception as e:
-        logger.error(f"Daily memory curation failed: {e}")
-
-
-async def run_curator_full():
-    """Scheduled monthly curator job (full database)."""
-    global curator
-    logger.info("Starting monthly full memory curation...")
-    try:
-        await curator.run_full()
-        logger.info("Monthly full memory curation completed successfully")
-    except Exception as e:
-        logger.error(f"Monthly full memory curation failed: {e}")
+        logger.error(f"Memory curation failed: {e}")
 
 
 @asynccontextmanager
@@ -59,22 +53,11 @@ async def lifespan(app: FastAPI):
         ollama_host=config.ollama_host
     )
     
-    # Schedule daily curator (recent 24h)
+    # Schedule daily curator
+    # Note: Monthly mode is detected automatically by curator_prompt.md (day 01)
     hour, minute = map(int, config.run_time.split(":"))
     scheduler.add_job(run_curator, "cron", hour=hour, minute=minute, id="daily_curator")
     logger.info(f"Daily curator scheduled at {config.run_time}")
-    
-    # Schedule monthly full curator (all raw memories)
-    full_hour, full_minute = map(int, config.full_run_time.split(":"))
-    scheduler.add_job(
-        run_curator_full, 
-        "cron", 
-        day=config.full_run_day, 
-        hour=full_hour, 
-        minute=full_minute,
-        id="monthly_curator"
-    )
-    logger.info(f"Monthly full curator scheduled on day {config.full_run_day} at {config.full_run_time}")
     
     scheduler.start()
     
@@ -141,16 +124,11 @@ async def proxy_all(request: Request, path: str):
 
 
 @app.post("/curator/run")
-async def trigger_curator(full: bool = False):
+async def trigger_curator():
     """Manually trigger curator.
     
-    Args:
-        full: If True, run full curation (all raw memories).
-              If False (default), run daily curation (recent 24h).
+    The curator will automatically detect if it's day 01 (monthly mode)
+    and process all memories. Otherwise processes recent 24h.
     """
-    if full:
-        await run_curator_full()
-        return {"status": "full curation completed"}
-    else:
-        await run_curator()
-        return {"status": "daily curation completed"}
+    await run_curator()
+    return {"status": "curation completed"}

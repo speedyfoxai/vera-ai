@@ -148,10 +148,8 @@ semantic_score_threshold = 0.6
 run_time = "02:00"
 
 # Time for monthly full curation (HH:MM format)
-full_run_time = "03:00"
 
 # Day of month for full curation (1-28)
-full_run_day = 1
 
 # Model to use for curation
 curator_model = "gpt-oss:120b"
@@ -308,7 +306,7 @@ docker run -d --name VeraAI -p 8080:11434 ...
 | Feature | Description |
 |---------|-------------|
 | 🧠 **Persistent Memory** | Conversations stored in Qdrant, retrieved contextually |
-| 📅 **Monthly Curation** | Daily + monthly cleanup of raw memories |
+| 📅 **Monthly Curation** | Daily cleanup, auto-monthly on day 01 |
 | 🔍 **4-Layer Context** | System + semantic + recent + current messages |
 | 👤 **Configurable UID/GID** | Match container user to host for permissions |
 | 🌍 **Timezone Support** | Scheduler runs in your local timezone |

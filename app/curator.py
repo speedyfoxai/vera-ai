@@ -1,7 +1,8 @@
-"""Memory curator - runs daily (recent 24h) and monthly (full DB) to clean and maintain memory database.
+"""Memory curator - runs daily to clean and maintain memory database.
 
-Creates INDIVIDUAL cleaned turns (one per raw turn), not merged summaries.
-Parses JSON response from curator_prompt.md format.
+On day 01 of each month, processes ALL raw memories (monthly mode).
+Otherwise, processes recent 24h of raw memories (daily mode).
+The prompt determines behavior based on current date.
 """
 import logging
 import os
@@ -23,7 +24,6 @@ STATIC_DIR = Path(os.environ.get("VERA_STATIC_DIR", "/app/static"))
 
 def load_curator_prompt() -> str:
     """Load curator prompt from prompts directory."""
-    # Try prompts directory first, then static for backward compatibility
     prompts_path = PROMPTS_DIR / "curator_prompt.md"
     static_path = STATIC_DIR / "curator_prompt.md"
     
@@ -42,16 +42,20 @@ class Curator:
         self.ollama_host = ollama_host
         self.curator_prompt = load_curator_prompt()
 
-    async def run(self, full: bool = False):
+    async def run(self):
         """Run the curation process.
         
-        Args:
-            full: If True, process ALL raw memories (monthly full run).
-                  If False, process only recent 24h (daily run).
+        Automatically detects day 01 for monthly mode (processes ALL raw memories).
+        Otherwise runs daily mode (processes recent 24h only).
+        The prompt determines behavior based on current date.
         """
-        logger.info(f"Starting memory curation (full={full})...")
+        current_date = datetime.utcnow()
+        is_monthly = current_date.day == 1
+        mode = "MONTHLY" if is_monthly else "DAILY"
+        
+        logger.info(f"Starting memory curation ({mode} mode)...")
         try:
-            current_date = datetime.utcnow().strftime("%Y-%m-%d")
+            current_date_str = current_date.strftime("%Y-%m-%d")
             
             # Get all memories (async)
             points, _ = await self.qdrant.client.scroll(
@@ -77,15 +81,15 @@ class Curator:
             
             logger.info(f"Found {len(raw_memories)} raw, {len(curated_memories)} curated")
 
-            # Filter by time for daily runs, process all for full runs
-            if full:
+            # Filter by time for daily mode, process all for monthly mode
+            if is_monthly:
                 # Monthly full run: process ALL raw memories
                 recent_raw = raw_memories
-                logger.info(f"FULL RUN: Processing all {len(recent_raw)} raw memories")
+                logger.info(f"MONTHLY MODE: Processing all {len(recent_raw)} raw memories")
             else:
                 # Daily run: process only recent 24h
                 recent_raw = [m for m in raw_memories if self._is_recent(m, hours=24)]
-                logger.info(f"DAILY RUN: Processing {len(recent_raw)} recent raw memories")
+                logger.info(f"DAILY MODE: Processing {len(recent_raw)} recent raw memories")
 
             existing_sample = curated_memories[-50:] if len(curated_memories) > 50 else curated_memories
 
@@ -96,10 +100,10 @@ class Curator:
             raw_turns_text = self._format_raw_turns(recent_raw)
             existing_text = self._format_existing_memories(existing_sample)
 
-            prompt = self.curator_prompt.replace("{CURRENT_DATE}", current_date)
+            prompt = self.curator_prompt.replace("{CURRENT_DATE}", current_date_str)
             full_prompt = f"""{prompt}
 
-## {'All' if full else 'Recent'} Raw Turns ({'full database' if full else 'last 24 hours'}):
+## {'All' if is_monthly else 'Recent'} Raw Turns ({'full database' if is_monthly else 'last 24 hours'}):
 {raw_turns_text}
 
 ## Existing Memories (sample):
@@ -152,19 +156,11 @@ Remember: Respond with ONLY valid JSON. No markdown, no explanations, just the J
                 await self.qdrant.delete_points(raw_ids_to_delete)
                 logger.info(f"Deleted {len(raw_ids_to_delete)} processed raw memories")
 
-            logger.info(f"Memory curation completed successfully (full={full})")
+            logger.info(f"Memory curation completed successfully ({mode} mode)")
 
         except Exception as e:
             logger.error(f"Error during curation: {e}")
             raise
-
-    async def run_full(self):
-        """Run full curation (all raw memories). Convenience method."""
-        await self.run(full=True)
-
-    async def run_daily(self):
-        """Run daily curation (recent 24h only). Convenience method."""
-        await self.run(full=False)
 
     def _is_recent(self, memory: Dict, hours: int = 24) -> bool:
         """Check if memory is within the specified hours."""
@@ -236,7 +232,9 @@ Remember: Respond with ONLY valid JSON. No markdown, no explanations, just the J
         except json.JSONDecodeError:
             pass
 
-        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', response)
+        # Try to find JSON in code blocks
+        pattern = r'```(?:json)?\s*([\s\S]*?)```'
+        json_match = re.search(pattern, response)
         if json_match:
             try:
                 return json.loads(json_match.group(1).strip())
@@ -248,7 +246,6 @@ Remember: Respond with ONLY valid JSON. No markdown, no explanations, just the J
 
     async def _append_rule_to_file(self, filename: str, rule: str):
         """Append a permanent rule to a prompts file."""
-        # Try prompts directory first, then static for backward compatibility
         prompts_path = PROMPTS_DIR / filename
         static_path = STATIC_DIR / filename
         

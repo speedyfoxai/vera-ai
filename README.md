@@ -58,7 +58,7 @@ Every conversation is stored in Qdrant vector database and retrieved contextuall
 | Feature | Description |
 |---------|-------------|
 | **🧠 Persistent Memory** | Conversations stored in Qdrant, retrieved contextually |
-| **📅 Monthly Curation** | Daily + monthly cleanup of raw memories |
+| **📅 Smart Curation** | Daily cleanup, auto-monthly on day 01 |
 | **🔍 4-Layer Context** | System + semantic + recent + current messages |
 | **👤 Configurable UID/GID** | Match container user to host for permissions |
 | **🌍 Timezone Support** | Scheduler runs in your local timezone |
@@ -314,10 +314,8 @@ run_time = "02:00"
 
 # Time for monthly full curation (HH:MM format, 24-hour)
 # Processes ALL raw memories
-full_run_time = "03:00"
 
 # Day of month for full curation (1-28)
-full_run_day = 1
 
 # Model to use for curation
 # Should be a capable model for summarization
@@ -540,7 +538,8 @@ TZ=Europe/London        # GMT/BST
 curl -X POST http://localhost:11434/curator/run
 
 # Full curation (all raw memories)
-curl -X POST "http://localhost:11434/curator/run?full=true"
+# Monthly mode is automatic on day 01
+# curl -X POST http://localhost:11434/curator/run
 ```
 
 ---

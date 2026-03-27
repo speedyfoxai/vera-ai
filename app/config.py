@@ -48,8 +48,7 @@ class Config:
     semantic_search_turns: int = 2
     semantic_score_threshold: float = 0.6  # Score threshold for semantic search
     run_time: str = "02:00"  # Daily curator time
-    full_run_time: str = "03:00"  # Monthly full curator time
-    full_run_day: int = 1  # Day of month for full run (1st)
+    # Monthly mode is detected by curator_prompt.md (day 01)
     curator_model: str = "gpt-oss:120b"
     debug: bool = False
     cloud: CloudConfig = field(default_factory=CloudConfig)
@@ -103,8 +102,6 @@ class Config:
             
             if "curator" in data:
                 config.run_time = data["curator"].get("run_time", config.run_time)
-                config.full_run_time = data["curator"].get("full_run_time", config.full_run_time)
-                config.full_run_day = data["curator"].get("full_run_day", config.full_run_day)
                 config.curator_model = data["curator"].get("curator_model", config.curator_model)
             
             if "cloud" in data:

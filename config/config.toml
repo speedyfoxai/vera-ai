@@ -14,8 +14,6 @@ semantic_score_threshold = 0.6
 
 [curator]
 # Daily curation: processes recent 24h of raw memories
+# Monthly mode is detected automatically by curator_prompt.md (day 01)
 run_time = "02:00"
-# Monthly full curation: processes ALL raw memories
-full_run_time = "03:00"
-full_run_day = 1  # Day of month (1st)
 curator_model = "gpt-oss:120b"
