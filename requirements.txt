@@ -6,3 +6,5 @@ ollama>=0.1.0
 toml>=0.10.2
 tiktoken>=0.5.0
 apscheduler>=3.10.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0

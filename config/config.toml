@@ -2,14 +2,14 @@
 ollama_host = "http://10.0.0.10:11434"
 qdrant_host = "http://10.0.0.22:6333"
 qdrant_collection = "memories"
-embedding_model = "mxbai-embed-large"
+embedding_model = "snowflake-arctic-embed2"
 debug = false
 
 [layers]
 semantic_token_budget = 25000
 context_token_budget = 22000
 semantic_search_turns = 2
-semantic_score_threshold = 0.3
+semantic_score_threshold = 0.6
 
 [curator]
 run_time = "02:00"

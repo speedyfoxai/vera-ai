@@ -80,7 +80,8 @@ async def health_check():
             resp = await client.get(f"{config.ollama_host}/api/tags")
             if resp.status_code == 200:
                 ollama_status = "reachable"
-    except: pass
+    except Exception:
+        logger.warning(f"Failed to reach Ollama at {config.ollama_host}")
     return {"status": "ok", "ollama": ollama_status}
 
 

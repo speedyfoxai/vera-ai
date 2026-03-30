@@ -171,7 +171,8 @@ Remember: Respond with ONLY valid JSON. No markdown, no explanations, just the J
             mem_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             cutoff = datetime.utcnow() - timedelta(hours=hours)
             return mem_time.replace(tzinfo=None) > cutoff
-        except:
+        except (ValueError, TypeError):
+            logger.debug(f"Could not parse timestamp: {timestamp}")
             return True
 
     def _format_raw_turns(self, turns: List[Dict]) -> str:
