@@ -349,3 +349,83 @@ class TestApiChatStreaming:
         # Response body should contain both chunks concatenated
         body_text = resp.text
         assert "Hello" in body_text or len(body_text) > 0
+
+
+# ---------------------------------------------------------------------------
+# Health check edge cases
+# ---------------------------------------------------------------------------
+
+class TestHealthCheckEdgeCases:
+    def test_health_ollama_timeout(self, app_with_mocks):
+        """GET / handles Ollama timeout gracefully."""
+        import httpx
+        from fastapi.testclient import TestClient
+
+        vera_app, _ = app_with_mocks
+
+        mock_client_instance = AsyncMock()
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_instance.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+
+        with patch("httpx.AsyncClient", return_value=mock_client_instance):
+            with TestClient(vera_app, raise_server_exceptions=True) as client:
+                resp = client.get("/")
+
+        assert resp.status_code == 200
+        assert resp.json()["ollama"] == "unreachable"
+
+
+# ---------------------------------------------------------------------------
+# POST /curator/run
+# ---------------------------------------------------------------------------
+
+class TestTriggerCurator:
+    def test_trigger_curator_endpoint(self, app_with_mocks):
+        """POST /curator/run triggers curation and returns status."""
+        from fastapi.testclient import TestClient
+        import app.main as main_module
+
+        vera_app, _ = app_with_mocks
+
+        mock_curator = MagicMock()
+        mock_curator.run = AsyncMock()
+
+        with patch.object(main_module, "curator", mock_curator):
+            with TestClient(vera_app) as client:
+                resp = client.post("/curator/run")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "curation completed"
+        mock_curator.run.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Proxy catch-all
+# ---------------------------------------------------------------------------
+
+class TestProxyAll:
+    def test_non_chat_api_proxied(self, app_with_mocks):
+        """Non-chat API paths are proxied to Ollama."""
+        from fastapi.testclient import TestClient
+
+        vera_app, _ = app_with_mocks
+
+        async def fake_aiter_bytes():
+            yield b'{"status": "ok"}'
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {"content-type": "application/json"}
+        mock_resp.aiter_bytes = fake_aiter_bytes
+
+        mock_client_instance = AsyncMock()
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_instance.request = AsyncMock(return_value=mock_resp)
+
+        with patch("httpx.AsyncClient", return_value=mock_client_instance):
+            with TestClient(vera_app) as client:
+                resp = client.get("/api/show")
+
+        assert resp.status_code == 200

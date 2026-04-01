@@ -219,3 +219,94 @@ class TestHandleChatNonStreaming:
         # The wrapper should be stripped
         assert "Memory context" not in stored_question
         assert "What is the answer?" in stored_question
+
+
+class TestDebugLog:
+    """Tests for debug_log function."""
+
+    def test_debug_log_writes_json_when_enabled(self, tmp_path):
+        """Debug log appends valid JSON line to file when debug=True."""
+        import json
+        from unittest.mock import patch, MagicMock
+
+        mock_config = MagicMock()
+        mock_config.debug = True
+
+        with patch("app.proxy_handler.config", mock_config), \
+             patch("app.proxy_handler.DEBUG_LOG_DIR", tmp_path):
+            from app.proxy_handler import debug_log
+            debug_log("test_cat", "test message", {"key": "value"})
+
+        log_files = list(tmp_path.glob("debug_*.log"))
+        assert len(log_files) == 1
+        content = log_files[0].read_text().strip()
+        entry = json.loads(content)
+        assert entry["category"] == "test_cat"
+        assert entry["message"] == "test message"
+        assert entry["data"]["key"] == "value"
+
+    def test_debug_log_skips_when_disabled(self, tmp_path):
+        """Debug log does nothing when debug=False."""
+        from unittest.mock import patch, MagicMock
+
+        mock_config = MagicMock()
+        mock_config.debug = False
+
+        with patch("app.proxy_handler.config", mock_config), \
+             patch("app.proxy_handler.DEBUG_LOG_DIR", tmp_path):
+            from app.proxy_handler import debug_log
+            debug_log("test_cat", "test message")
+
+        log_files = list(tmp_path.glob("debug_*.log"))
+        assert len(log_files) == 0
+
+    def test_debug_log_without_data(self, tmp_path):
+        """Debug log works without optional data parameter."""
+        import json
+        from unittest.mock import patch, MagicMock
+
+        mock_config = MagicMock()
+        mock_config.debug = True
+
+        with patch("app.proxy_handler.config", mock_config), \
+             patch("app.proxy_handler.DEBUG_LOG_DIR", tmp_path):
+            from app.proxy_handler import debug_log
+            debug_log("simple_cat", "no data here")
+
+        log_files = list(tmp_path.glob("debug_*.log"))
+        assert len(log_files) == 1
+        entry = json.loads(log_files[0].read_text().strip())
+        assert "data" not in entry
+        assert entry["category"] == "simple_cat"
+
+
+class TestForwardToOllama:
+    """Tests for forward_to_ollama function."""
+
+    @pytest.mark.asyncio
+    async def test_forwards_request_to_ollama(self):
+        """forward_to_ollama proxies request to Ollama host."""
+        from app.proxy_handler import forward_to_ollama
+        from unittest.mock import patch, AsyncMock, MagicMock
+
+        mock_request = AsyncMock()
+        mock_request.body = AsyncMock(return_value=b'{"model": "llama3"}')
+        mock_request.method = "POST"
+        mock_request.headers = {"content-type": "application/json", "content-length": "20"}
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.request = AsyncMock(return_value=mock_resp)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await forward_to_ollama(mock_request, "/api/show")
+
+        assert result == mock_resp
+        mock_client.request.assert_called_once()
+        call_kwargs = mock_client.request.call_args
+        assert call_kwargs[1]["method"] == "POST"
+        assert "/api/show" in call_kwargs[1]["url"]

@@ -1,7 +1,7 @@
 """Tests for utility functions."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.utils import count_tokens, truncate_by_tokens, parse_curated_turn, build_augmented_messages
+from app.utils import count_tokens, truncate_by_tokens, parse_curated_turn, build_augmented_messages, count_messages_tokens
 
 
 class TestCountTokens:
@@ -84,6 +84,76 @@ Assistant: Yes, very popular."""
         assert "Line 1" in result[0]["content"]
         assert "Line 2" in result[0]["content"]
         assert "Line 3" in result[0]["content"]
+
+
+class TestCountMessagesTokens:
+    """Tests for count_messages_tokens function."""
+
+    def test_empty_list(self):
+        """Empty message list returns 0."""
+        assert count_messages_tokens([]) == 0
+
+    def test_single_message(self):
+        """Single message counts tokens of its content."""
+        msgs = [{"role": "user", "content": "Hello world"}]
+        result = count_messages_tokens(msgs)
+        assert result > 0
+
+    def test_multiple_messages(self):
+        """Multiple messages sum up their token counts."""
+        msgs = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there, how can I help you today?"},
+        ]
+        result = count_messages_tokens(msgs)
+        assert result > count_messages_tokens([msgs[0]])
+
+    def test_message_without_content(self):
+        """Message without content field contributes 0 tokens."""
+        msgs = [{"role": "system"}]
+        assert count_messages_tokens(msgs) == 0
+
+
+class TestLoadSystemPrompt:
+    """Tests for load_system_prompt function."""
+
+    def test_loads_from_prompts_dir(self, tmp_path):
+        """Loads systemprompt.md from PROMPTS_DIR."""
+        import app.utils as utils_module
+
+        prompts_dir = tmp_path / "prompts"
+        prompts_dir.mkdir()
+        (prompts_dir / "systemprompt.md").write_text("You are Vera.")
+
+        with patch.object(utils_module, "PROMPTS_DIR", prompts_dir):
+            result = utils_module.load_system_prompt()
+
+        assert result == "You are Vera."
+
+    def test_falls_back_to_static_dir(self, tmp_path):
+        """Falls back to STATIC_DIR when PROMPTS_DIR has no file."""
+        import app.utils as utils_module
+
+        prompts_dir = tmp_path / "no_prompts"  # does not exist
+        static_dir = tmp_path / "static"
+        static_dir.mkdir()
+        (static_dir / "systemprompt.md").write_text("Static Vera.")
+
+        with patch.object(utils_module, "PROMPTS_DIR", prompts_dir), \
+             patch.object(utils_module, "STATIC_DIR", static_dir):
+            result = utils_module.load_system_prompt()
+
+        assert result == "Static Vera."
+
+    def test_returns_empty_when_not_found(self, tmp_path):
+        """Returns empty string when systemprompt.md not found anywhere."""
+        import app.utils as utils_module
+
+        with patch.object(utils_module, "PROMPTS_DIR", tmp_path / "nope"), \
+             patch.object(utils_module, "STATIC_DIR", tmp_path / "also_nope"):
+            result = utils_module.load_system_prompt()
+
+        assert result == ""
 
 
 class TestFilterMemoriesByTime:
