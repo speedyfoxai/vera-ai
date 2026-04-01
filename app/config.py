@@ -1,5 +1,5 @@
 # app/config.py
-import toml
+import tomllib
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -83,8 +83,8 @@ class Config:
         config = cls()
         
         if config_path.exists():
-            with open(config_path, "r") as f:
-                data = toml.load(f)
+            with open(config_path, "rb") as f:
+                data = tomllib.load(f)
             
             if "general" in data:
                 config.ollama_host = data["general"].get("ollama_host", config.ollama_host)
