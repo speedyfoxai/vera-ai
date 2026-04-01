@@ -124,6 +124,16 @@ class TestFilterMemoriesByTime:
         result = filter_memories_by_time(memories, hours=24)
         assert len(result) == 1
 
+    def test_z_suffix_old_timestamp_excluded(self):
+        """Regression: chained .replace() was not properly handling Z suffix on old timestamps."""
+        from datetime import datetime, timedelta, timezone
+        from app.utils import filter_memories_by_time
+
+        old_ts = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)).isoformat() + "Z"
+        memories = [{"timestamp": old_ts, "text": "old with Z"}]
+        result = filter_memories_by_time(memories, hours=24)
+        assert len(result) == 0, f"Old Z-suffixed timestamp should be excluded but wasn't: {old_ts}"
+
     def test_empty_list(self):
         """Empty input returns empty list."""
         from app.utils import filter_memories_by_time

@@ -64,7 +64,7 @@ def filter_memories_by_time(memories: List[Dict], hours: int = 24) -> List[Dict]
             try:
                 # Parse ISO timestamp
                 if isinstance(ts, str):
-                    mem_time = datetime.fromisoformat(ts.replace("Z", "+00:00").replace("+00:00", ""))
+                    mem_time = datetime.fromisoformat(ts.replace("Z", "")).replace(tzinfo=None)
                 else:
                     mem_time = ts
                 if mem_time > cutoff:
