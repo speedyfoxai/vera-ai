@@ -1,128 +1,187 @@
-# Vera-AI Project
+# CLAUDE.md
 
-**Persistent Memory Proxy for Ollama**
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Status:** Built and running on deb8. Goal: Validate and improve.
+## Infrastructure
 
-Vera-AI sits between AI clients and Ollama, storing conversations in Qdrant and retrieving context semantically — giving AI **true memory**.
+| Role | Host | Access |
+|------|------|--------|
+| Source (deb9) | 10.0.0.48 | `ssh deb9` — `/home/n8n/vera-ai/` |
+| Production (deb8) | 10.0.0.46 | `ssh deb8` — runs vera-ai in Docker |
+| Gitea | 10.0.0.61:3000 | `SpeedyFoxAi/vera-ai-v2`, HTTPS only (SSH disabled) |
+
+User `n8n` on deb8/deb9. SSH key `~/.ssh/vera-ai`. Gitea credentials in `~/.netrc`.
+
+## Git Workflow
+
+Three locations — all point to `origin` on Gitea:
+
+```
+local (/home/adm1n/claude/vera-ai)  ←→  Gitea (10.0.0.61:3000)  ←→  deb9 (/home/n8n/vera-ai)
+        ↓                                                                   ↓
+  github/gitlab                                                  deb8 (scp files + docker build)
+  (mirrors)
+```
+
+```bash
+# Edit on deb9, commit, push
+ssh deb9
+cd /home/n8n/vera-ai
+git pull origin main              # sync first
+git add -p && git commit -m "..."
+git push origin main
+
+# Pull to local working copy
+cd /home/adm1n/claude/vera-ai
+git pull origin main
+
+# Deploy to production (deb8 has no git repo — scp files then build)
+scp app/*.py n8n@10.0.0.46:/home/n8n/vera-ai/app/
+ssh deb8 'cd /home/n8n/vera-ai && docker compose build && docker compose up -d'
+```
+
+## Publishing (Docker Hub + Git Mirrors)
+
+Image: `mdkrushr/vera-ai` on Docker Hub. Build and push from deb8:
+
+```bash
+ssh deb8
+cd /home/n8n/vera-ai
+docker build -t mdkrushr/vera-ai:2.0.4 -t mdkrushr/vera-ai:latest .
+docker push mdkrushr/vera-ai:2.0.4
+docker push mdkrushr/vera-ai:latest
+```
+
+The local repo has two mirror remotes for public distribution. After committing and pushing to `origin` (Gitea), mirror with:
+
+```bash
+git push github main --tags
+git push gitlab main --tags
+```
+
+| Remote | URL |
+|--------|-----|
+| `origin` | `10.0.0.61:3000/SpeedyFoxAi/vera-ai-v2` (Gitea, primary) |
+| `github` | `github.com/speedyfoxai/vera-ai` |
+| `gitlab` | `gitlab.com/mdkrush/vera-ai` |
+
+## Build & Run (deb8, production)
+
+```bash
+ssh deb8
+cd /home/n8n/vera-ai
+docker compose build
+docker compose up -d
+docker logs vera-ai --tail 30
+curl http://localhost:11434/                   # health check
+curl -X POST http://localhost:11434/curator/run  # trigger curation
+```
+
+## Tests (deb9, source)
+
+```bash
+ssh deb9
+cd /home/n8n/vera-ai
+python3 -m pytest tests/                                          # all tests
+python3 -m pytest tests/test_utils.py                             # single file
+python3 -m pytest tests/test_utils.py::TestParseCuratedTurn::test_single_turn  # single test
+python3 -m pytest tests/ --cov=app --cov-report=term-missing      # with coverage
+```
+
+Tests are unit-only — no live Qdrant/Ollama required. `pytest.ini` sets `asyncio_mode=auto`. Shared fixtures with production-realistic data in `tests/conftest.py`.
+
+Test files and what they cover:
+
+| File | Covers |
+|------|--------|
+| `tests/test_utils.py` | Token counting, truncation, memory filtering/merging, `parse_curated_turn`, `load_system_prompt`, `build_augmented_messages` |
+| `tests/test_config.py` | Config defaults, TOML loading, `CloudConfig`, env var overrides |
+| `tests/test_curator.py` | JSON parsing, `_is_recent`, `_format_raw_turns`, `_format_existing_memories`, `_call_llm`, `_append_rule_to_file`, `load_curator_prompt`, full `run()` scenarios |
+| `tests/test_proxy_handler.py` | `clean_message_content`, `handle_chat_non_streaming`, `debug_log`, `forward_to_ollama` |
+| `tests/test_integration.py` | FastAPI health check, `/api/tags` (with cloud models), `/api/chat` round-trips (streaming + non-streaming), curator trigger, proxy passthrough |
+| `tests/test_qdrant_service.py` | `_ensure_collection`, `get_embedding`, `store_turn`, `store_qa_turn`, `semantic_search`, `get_recent_turns`, `delete_points`, `close` |
 
 ## Architecture
 
 ```
-Client → Vera-AI (port 11434) → Ollama
-              ↓
-           Qdrant (vector DB)
-              ↓
-           Memory Storage
+Client → Vera-AI :11434 → Ollama :11434
+               ↓↑
+          Qdrant :6333
 ```
 
-## Key Components
+Vera-AI is a FastAPI proxy. Every `/api/chat` request is intercepted, augmented with memory context, forwarded to Ollama, and the response Q&A is stored back in Qdrant.
 
-| File | Purpose |
-|------|---------|
-| `app/main.py` | FastAPI application entry point |
-| `app/proxy_handler.py` | Chat request handling |
-| `app/qdrant_service.py` | Vector DB operations |
-| `app/curator.py` | Memory curation (daily/monthly) |
-| `app/config.py` | Configuration loader |
-| `config/config.toml` | Main configuration file |
+### 4-Layer Context System (`app/utils.py:build_augmented_messages`)
 
-## 4-Layer Context System
+Each chat request builds an augmented message list in this order:
 
-1. **System Prompt** — From `prompts/systemprompt.md`
-2. **Semantic Memory** — Curated Q&A from Qdrant (relevance search)
-3. **Recent Context** — Last N conversation turns
-4. **Current Messages** — User's current request
+1. **System** — caller's system prompt passed through; `prompts/systemprompt.md` appended if non-empty (if empty, caller's prompt passes through unchanged; if no caller system prompt, vera's prompt used alone)
+2. **Semantic** — curated AND raw Q&A pairs from Qdrant matching the query (score ≥ `semantic_score_threshold`, up to `semantic_token_budget` tokens). Searches both types to avoid a blind spot where raw turns fall off the recent window before curation runs.
+3. **Recent context** — last 50 turns from Qdrant (server-sorted by timestamp via payload index), oldest first, up to `context_token_budget` tokens. Deduplicates against Layer 2 results to avoid wasting token budget.
+4. **Current** — the incoming messages (non-system) passed through unchanged
+
+The system prompt is **never truncated**. Semantic and context layers are budget-limited and drop excess entries silently.
+
+### Memory Types in Qdrant
+
+| Type | When created | Retention |
+|------|-------------|-----------|
+| `raw` | After each chat turn | Until curation runs |
+| `curated` | After curator processes `raw` | Permanent |
+
+Payload format: `{type, text, timestamp, role, content}`. Curated entries use `role="curated"` with text formatted as `User: ...\nAssistant: ...\nTimestamp: ...`, which `parse_curated_turn()` deserializes back into proper message role pairs at retrieval time.
+
+### Curator (`app/curator.py`)
+
+Scheduled via APScheduler at `config.run_time` (default 02:00). Automatically detects day 01 of month for monthly mode (processes ALL raw) vs. daily mode (last 24h only). Sends raw memories to `curator_model` LLM with `prompts/curator_prompt.md`, expects JSON response:
+
+```json
+{
+  "new_curated_turns": [{"content": "User: ...\nAssistant: ..."}],
+  "permanent_rules": [{"rule": "...", "target_file": "systemprompt.md"}],
+  "deletions": ["uuid1", "uuid2"],
+  "summary": "..."
+}
+```
+
+`permanent_rules` are appended to the named file in `prompts/`. After curation, all processed raw entries are deleted.
+
+### Cloud Model Routing
+
+Optional `[cloud]` section in `config.toml` routes specific model names to an OpenRouter-compatible API instead of Ollama. Cloud models are injected into `/api/tags` so clients see them alongside local models.
+
+```toml
+[cloud]
+enabled = true
+api_base = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+[cloud.models]
+"gpt-oss:120b" = "openai/gpt-4o"
+```
+
+### Key Implementation Details
+
+- **Config loading** uses stdlib `tomllib` (read-only, Python 3.11+). No third-party TOML dependency.
+- **QdrantService singleton** lives in `app/singleton.py`. All modules import from there — `app/utils.py` re-exports via `from .singleton import get_qdrant_service`.
+- **Datetime handling** uses `datetime.now(timezone.utc)` throughout. No `utcnow()` calls. Stored timestamps are naive UTC with "Z" suffix; comparison code strips tzinfo for naive-vs-naive matching.
+- **Debug logging** in `proxy_handler.py` uses `portalocker` for file locking under concurrent requests. Controlled by `config.debug`.
 
 ## Configuration
 
-Key settings in `config/config.toml`:
+All settings in `config/config.toml`. Key tuning knobs:
 
-```toml
-[general]
-ollama_host = "http://10.0.0.10:11434"
-qdrant_host = "http://10.0.0.22:6333"
-qdrant_collection = "memories"
-embedding_model = "snowflake-arctic-embed2"
+- `semantic_token_budget` / `context_token_budget` — controls how much memory gets injected
+- `semantic_score_threshold` — lower = more (but less relevant) memories returned
+- `curator_model` — model used for daily curation (needs strong reasoning)
+- `debug = true` — enables per-request JSON logs written to `logs/debug_YYYY-MM-DD.log`
 
-[layers]
-semantic_token_budget = 25000
-context_token_budget = 22000
-semantic_search_turns = 2
-semantic_score_threshold = 0.6
+Environment variable overrides: `VERA_CONFIG_DIR`, `VERA_PROMPTS_DIR`, `VERA_LOG_DIR`.
 
-[curator]
-run_time = "02:00"  # Daily curation time
-curator_model = "gpt-oss:120b"
-```
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `APP_UID` | `999` | Container user ID |
-| `APP_GID` | `999` | Container group ID |
-| `TZ` | `UTC` | Timezone |
-| `VERA_DEBUG` | `false` | Enable debug logging |
-
-## Running
-
-```bash
-# Build and start
-docker compose build
-docker compose up -d
-
-# Check status
-docker ps
-docker logs VeraAI --tail 20
-
-# Health check
-curl http://localhost:11434/
-```
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Health check |
-| `/api/chat` | POST | Chat completion (with memory) |
-| `/api/tags` | GET | List models |
-| `/api/generate` | POST | Generate completion |
-| `/curator/run` | POST | Trigger curation manually |
-
-## Development Workflow
-
-This project is synced with **deb9** (10.0.0.48). To sync changes:
-
-```bash
-# Pull from deb9
-sshpass -p 'passw0rd' scp -r -o StrictHostKeyChecking=no n8n@10.0.0.48:/home/n8n/vera-ai/* /home/n8n/vera-ai/
-
-# Push to deb9 (after local changes)
-sshpass -p 'passw0rd' scp -r -o StrictHostKeyChecking=no /home/n8n/vera-ai/* n8n@10.0.0.48:/home/n8n/vera-ai/
-```
-
-## Memory System
-
-- **raw** memories — Unprocessed conversation turns (until curation)
-- **curated** memories — Cleaned Q&A pairs (permanent)
-- **test** memories — Test entries (can be ignored)
-
-Curation runs daily at 02:00 and monthly on the 1st at 03:00.
-
-## Related Infrastructure
+## Related Services
 
 | Service | Host | Port |
 |---------|------|------|
-| Qdrant | 10.0.0.22 | 6333 |
 | Ollama | 10.0.0.10 | 11434 |
-| deb9 | 10.0.0.48 | Source project (SSH) |
-| deb8 | 10.0.0.46 | Docker runtime |
+| Qdrant | 10.0.0.22 | 6333 |
 
-## Qdrant Collections
-
-| Collection | Purpose |
-|------------|---------|
-| `python_kb` | Python code patterns reference for this project |
-| `memories` | Conversation memory storage (default) |
-| `vera_memories` | Alternative memory collection |
+Qdrant collections: `memories` (default), `vera_memories` (alternative), `python_kb` (reference patterns).
