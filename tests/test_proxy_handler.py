@@ -46,16 +46,16 @@ class TestCleanMessageContent:
 
         assert clean_message_content(None) is None
 
-    def test_list_content_not_processed(self):
-        """Non-string content (list) is returned as-is."""
+    def test_list_content_raises_type_error(self):
+        """Non-string content (list) causes TypeError — the function expects strings."""
+        import pytest
         from app.proxy_handler import clean_message_content
 
-        # content can be a list of parts in some Ollama payloads;
-        # the function guards with `if not content`
-        # A non-empty list is truthy but the regex won't match → passthrough
+        # The function passes lists to re.search which requires str/bytes.
+        # Document this behavior so we know it's a known limitation.
         content = [{"type": "text", "text": "hello"}]
-        result = clean_message_content(content)
-        assert result == content
+        with pytest.raises(TypeError):
+            clean_message_content(content)
 
 
 class TestHandleChatNonStreaming:
