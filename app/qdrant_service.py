@@ -2,7 +2,7 @@
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import logging
 import httpx
@@ -54,7 +54,7 @@ class QdrantService:
         point_id = str(uuid.uuid4())
         embedding = await self.get_embedding(content)
         
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         text = content
         if role == "user":
             text = f"User: {content}"
@@ -85,7 +85,7 @@ class QdrantService:
         """Store a complete Q&A turn as one document."""
         await self._ensure_collection()
         
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         text = f"User: {user_question}\nAssistant: {assistant_answer}\nTimestamp: {timestamp}"
         
         point_id = str(uuid.uuid4())

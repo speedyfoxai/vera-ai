@@ -6,7 +6,7 @@ The prompt determines behavior based on current date.
 """
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import httpx
@@ -49,7 +49,7 @@ class Curator:
         Otherwise runs daily mode (processes recent 24h only).
         The prompt determines behavior based on current date.
         """
-        current_date = datetime.utcnow()
+        current_date = datetime.now(timezone.utc)
         is_monthly = current_date.day == 1
         mode = "MONTHLY" if is_monthly else "DAILY"
         
@@ -169,7 +169,7 @@ Remember: Respond with ONLY valid JSON. No markdown, no explanations, just the J
             return True
         try:
             mem_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
             return mem_time.replace(tzinfo=None) > cutoff
         except (ValueError, TypeError):
             logger.debug(f"Could not parse timestamp: {timestamp}")

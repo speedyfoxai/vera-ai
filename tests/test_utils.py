@@ -90,20 +90,20 @@ class TestFilterMemoriesByTime:
 
     def test_includes_recent_memory(self):
         """Memory with timestamp in the last 24h should be included."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         from app.utils import filter_memories_by_time
 
-        ts = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+        ts = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)).isoformat()
         memories = [{"timestamp": ts, "text": "recent"}]
         result = filter_memories_by_time(memories, hours=24)
         assert len(result) == 1
 
     def test_excludes_old_memory(self):
         """Memory older than cutoff should be excluded."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         from app.utils import filter_memories_by_time
 
-        ts = (datetime.utcnow() - timedelta(hours=48)).isoformat()
+        ts = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)).isoformat()
         memories = [{"timestamp": ts, "text": "old"}]
         result = filter_memories_by_time(memories, hours=24)
         assert len(result) == 0
@@ -132,10 +132,10 @@ class TestFilterMemoriesByTime:
 
     def test_z_suffix_timestamp(self):
         """ISO timestamp with Z suffix should be handled correctly."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         from app.utils import filter_memories_by_time
 
-        ts = (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z"
+        ts = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)).isoformat() + "Z"
         memories = [{"timestamp": ts, "text": "recent with Z"}]
         result = filter_memories_by_time(memories, hours=24)
         assert len(result) == 1

@@ -2,7 +2,7 @@
 import pytest
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -77,14 +77,14 @@ class TestIsRecent:
     def test_memory_within_window(self):
         """Memory timestamped 1 hour ago is recent (within 24h)."""
         curator, _ = make_curator()
-        ts = (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z"
+        ts = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)).isoformat() + "Z"
         memory = {"timestamp": ts}
         assert curator._is_recent(memory, hours=24) is True
 
     def test_memory_outside_window(self):
         """Memory timestamped 48 hours ago is not recent."""
         curator, _ = make_curator()
-        ts = (datetime.utcnow() - timedelta(hours=48)).isoformat() + "Z"
+        ts = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)).isoformat() + "Z"
         memory = {"timestamp": ts}
         assert curator._is_recent(memory, hours=24) is False
 
@@ -109,7 +109,7 @@ class TestIsRecent:
     def test_boundary_edge_just_inside(self):
         """Memory at exactly hours-1 minutes ago should be recent."""
         curator, _ = make_curator()
-        ts = (datetime.utcnow() - timedelta(hours=23, minutes=59)).isoformat() + "Z"
+        ts = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=23, minutes=59)).isoformat() + "Z"
         memory = {"timestamp": ts}
         assert curator._is_recent(memory, hours=24) is True
 

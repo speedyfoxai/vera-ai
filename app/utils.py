@@ -3,7 +3,7 @@ from .config import config
 import tiktoken
 import os
 from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Use cl100k_base encoding (GPT-4 compatible)
@@ -56,7 +56,7 @@ def truncate_by_tokens(text: str, max_tokens: int) -> str:
 
 def filter_memories_by_time(memories: List[Dict], hours: int = 24) -> List[Dict]:
     """Filter memories from the last N hours."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
     filtered = []
     for mem in memories:
         ts = mem.get("timestamp")

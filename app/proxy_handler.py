@@ -48,17 +48,17 @@ def debug_log(category: str, message: str, data: dict = None):
     if not config.debug:
         return
     
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     # Create logs directory
     log_dir = DEBUG_LOG_DIR
     log_dir.mkdir(parents=True, exist_ok=True)
     
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     log_path = log_dir / f"debug_{today}.log"
     
     entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "category": category,
         "message": message
     }
