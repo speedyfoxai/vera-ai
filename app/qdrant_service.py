@@ -1,6 +1,6 @@
 """Qdrant service for memory storage - ASYNC VERSION."""
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, PayloadSchemaType
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import uuid
@@ -34,6 +34,15 @@ class QdrantService:
                 vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE)
             )
             logger.info(f"Created collection {self.collection} with vector size {self.vector_size}")
+        # Ensure payload index on timestamp for ordered scroll
+        try:
+            await self.client.create_payload_index(
+                collection_name=self.collection,
+                field_name="timestamp",
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+        except Exception:
+            pass  # Index may already exist
         self._collection_ensured = True
 
     async def get_embedding(self, text: str) -> List[float]:
@@ -105,20 +114,28 @@ class QdrantService:
         )
         return point_id
 
-    async def semantic_search(self, query: str, limit: int = 10, score_threshold: float = 0.6, entry_type: str = "curated") -> List[Dict]:
-        """Semantic search for relevant turns, filtered by type."""
+    async def semantic_search(self, query: str, limit: int = 10, score_threshold: float = 0.6, entry_type: str = "curated", entry_types: Optional[List[str]] = None) -> List[Dict]:
+        """Semantic search for relevant turns, filtered by type(s)."""
         await self._ensure_collection()
-        
+
         embedding = await self.get_embedding(query)
-        
+
+        if entry_types and len(entry_types) > 1:
+            type_filter = Filter(
+                should=[FieldCondition(key="type", match=MatchValue(value=t)) for t in entry_types]
+            )
+        else:
+            filter_type = entry_types[0] if entry_types else entry_type
+            type_filter = Filter(
+                must=[FieldCondition(key="type", match=MatchValue(value=filter_type))]
+            )
+
         results = await self.client.query_points(
             collection_name=self.collection,
             query=embedding,
             limit=limit,
             score_threshold=score_threshold,
-            query_filter=Filter(
-                must=[FieldCondition(key="type", match=MatchValue(value=entry_type))]
-            )
+            query_filter=type_filter
         )
         
         return [{"id": str(r.id), "score": r.score, "payload": r.payload} for r in results.points]
@@ -126,21 +143,29 @@ class QdrantService:
     async def get_recent_turns(self, limit: int = 20) -> List[Dict]:
         """Get recent turns from Qdrant (both raw and curated)."""
         await self._ensure_collection()
-        
-        points, _ = await self.client.scroll(
-            collection_name=self.collection,
-            limit=limit * 2,
-            with_payload=True
-        )
-        
-        # Sort by timestamp descending
-        sorted_points = sorted(
-            points,
-            key=lambda p: p.payload.get("timestamp", ""),
-            reverse=True
-        )
-        
-        return [{"id": str(p.id), "payload": p.payload} for p in sorted_points[:limit]]
+
+        try:
+            from qdrant_client.models import OrderBy
+            points, _ = await self.client.scroll(
+                collection_name=self.collection,
+                limit=limit,
+                with_payload=True,
+                order_by=OrderBy(key="timestamp", direction="desc")
+            )
+        except Exception:
+            # Fallback: fetch extra points and sort client-side
+            points, _ = await self.client.scroll(
+                collection_name=self.collection,
+                limit=limit * 5,
+                with_payload=True
+            )
+            points = sorted(
+                points,
+                key=lambda p: p.payload.get("timestamp", ""),
+                reverse=True
+            )[:limit]
+
+        return [{"id": str(p.id), "payload": p.payload} for p in points]
 
     async def delete_points(self, point_ids: List[str]) -> None:
         """Delete points by ID."""

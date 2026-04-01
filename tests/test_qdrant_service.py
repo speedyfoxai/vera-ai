@@ -217,12 +217,13 @@ class TestGetRecentTurns:
         mock_point2.id = "new"
         mock_point2.payload = {"timestamp": "2026-03-01T00:00:00Z", "text": "new turn"}
 
-        mock_client.scroll = AsyncMock(return_value=([mock_point1, mock_point2], None))
+        # OrderBy returns server-sorted results (newest first)
+        mock_client.scroll = AsyncMock(return_value=([mock_point2, mock_point1], None))
 
         results = await svc.get_recent_turns(limit=2)
 
         assert len(results) == 2
-        # Newest first
+        # Newest first (server-sorted via OrderBy)
         assert results[0]["id"] == "new"
         assert results[1]["id"] == "old"
 

@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
     await qdrant_service.close()
 
 
-app = FastAPI(title="Vera-AI", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Vera-AI", version="2.0.4", lifespan=lifespan)
 
 
 @app.get("/")

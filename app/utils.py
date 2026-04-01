@@ -213,23 +213,25 @@ async def build_augmented_messages(incoming_messages: List[Dict]) -> List[Dict]:
         messages.append({"role": "system", "content": system_content})
         logger.info(f"Layer 1 (system): {count_tokens(system_content)} tokens")
     
-    # === LAYER 2: Semantic (curated memories) ===
+    # === LAYER 2: Semantic (curated + raw memories) ===
     qdrant = get_qdrant_service()
     semantic_results = await qdrant.semantic_search(
         query=search_context if search_context else user_question,
         limit=20,
         score_threshold=config.semantic_score_threshold,
-        entry_type="curated"
+        entry_types=["curated", "raw"]
     )
     
     semantic_messages = []
     semantic_tokens_used = 0
-    
+    semantic_ids = set()
+
     for result in semantic_results:
+        semantic_ids.add(result.get("id"))
         payload = result.get("payload", {})
         text = payload.get("text", "")
         if text:
-            # Parse curated turn into proper user/assistant messages
+            # Parse curated/raw turn into proper user/assistant messages
             parsed = parse_curated_turn(text)
             for msg in parsed:
                 msg_tokens = count_tokens(msg.get("content", ""))
@@ -254,8 +256,10 @@ async def build_augmented_messages(incoming_messages: List[Dict]) -> List[Dict]:
     context_messages = []
     context_tokens_used = 0
     
-    # Process oldest first for chronological order
+    # Process oldest first for chronological order, skip duplicates from Layer 2
     for turn in reversed(recent_turns):
+        if turn.get("id") in semantic_ids:
+            continue
         payload = turn.get("payload", {})
         text = payload.get("text", "")
         entry_type = payload.get("type", "raw")
