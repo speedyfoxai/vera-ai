@@ -6,6 +6,7 @@ import json
 import re
 import logging
 import os
+import portalocker
 from pathlib import Path
 from .config import config
 from .singleton import get_qdrant_service
@@ -66,7 +67,9 @@ def debug_log(category: str, message: str, data: dict = None):
         entry["data"] = data
     
     with open(log_path, "a") as f:
+        portalocker.lock(f, portalocker.LOCK_EX)
         f.write(json.dumps(entry) + "\n")
+        portalocker.unlock(f)
 
 
 async def handle_chat_non_streaming(body: dict):

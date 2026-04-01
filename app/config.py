@@ -112,7 +112,14 @@ class Config:
                     api_key_env=cloud_data.get("api_key_env", "OPENROUTER_API_KEY"),
                     models=cloud_data.get("models", {})
                 )
-        
+
+        if config.cloud.enabled and not config.cloud.api_key:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Cloud is enabled but API key env var '%s' is not set",
+                config.cloud.api_key_env
+            )
+
         return config
 
 config = Config.load()

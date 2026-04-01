@@ -212,7 +212,7 @@ Remember: Respond with ONLY valid JSON. No markdown, no explanations, just the J
                 result = response.json()
                 return result.get("response", "")
         except Exception as e:
-            logger.error(f"Failed to call LLM: {e}")
+            logger.error(f"LLM call failed: {e}", exc_info=True)
             return ""
 
     def _parse_json_response(self, response: str) -> Optional[Dict]:
@@ -223,6 +223,7 @@ Remember: Respond with ONLY valid JSON. No markdown, no explanations, just the J
         try:
             return json.loads(response)
         except json.JSONDecodeError:
+            logger.debug("Direct JSON parse failed, trying brace extraction")
             pass
 
         try:
