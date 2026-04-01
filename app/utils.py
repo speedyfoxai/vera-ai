@@ -1,5 +1,6 @@
 """Utility functions for vera-ai."""
 from .config import config
+from .singleton import get_qdrant_service
 import tiktoken
 import os
 from typing import List, Dict, Optional
@@ -12,24 +13,6 @@ ENCODING = tiktoken.get_encoding("cl100k_base")
 # Configurable paths (can be overridden via environment)
 PROMPTS_DIR = Path(os.environ.get("VERA_PROMPTS_DIR", "/app/prompts"))
 STATIC_DIR = Path(os.environ.get("VERA_STATIC_DIR", "/app/static"))
-
-# Global qdrant_service instance for utils
-_qdrant_service = None
-
-def get_qdrant_service():
-    """Get or create the QdrantService singleton."""
-    global _qdrant_service
-    if _qdrant_service is None:
-        from .config import config
-        from .qdrant_service import QdrantService
-        _qdrant_service = QdrantService(
-            host=config.qdrant_host,
-            collection=config.qdrant_collection,
-            embedding_model=config.embedding_model,
-            vector_size=config.vector_size,
-            ollama_host=config.ollama_host
-        )
-    return _qdrant_service
 
 def count_tokens(text: str) -> int:
     """Count tokens in text."""

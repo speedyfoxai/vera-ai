@@ -1,8 +1,9 @@
 """Global singleton instances for Vera-AI."""
+from typing import Optional
 from .qdrant_service import QdrantService
 from .config import config
 
-_qdrant_service: QdrantService = None
+_qdrant_service: Optional[QdrantService] = None
 
 
 def get_qdrant_service() -> QdrantService:
