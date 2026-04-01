@@ -83,15 +83,6 @@ def merge_memories(memories: List[Dict]) -> Dict:
         "ids": ids
     }
 
-def calculate_token_budget(total_budget: int, system_ratio: float = 0.2, 
-                           semantic_ratio: float = 0.5, context_ratio: float = 0.3) -> Dict[int, int]:
-    """Calculate token budgets for each layer."""
-    return {
-        "system": int(total_budget * system_ratio),
-        "semantic": int(total_budget * semantic_ratio),
-        "context": int(total_budget * context_ratio)
-    }
-
 def load_system_prompt() -> str:
     """Load system prompt from prompts directory."""
     import logging

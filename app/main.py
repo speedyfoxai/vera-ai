@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from contextlib import asynccontextmanager
 import httpx
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .config import config
 from .singleton import get_qdrant_service
@@ -96,7 +96,7 @@ async def api_tags():
         for name in config.cloud.models.keys():
             data["models"].append({
                 "name": name,
-                "modified_at": "2026-03-25T00:00:00Z",
+                "modified_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "size": 0,
                 "digest": "cloud",
                 "details": {"family": "cloud"}

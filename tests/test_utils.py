@@ -201,37 +201,6 @@ class TestMergeMemories:
         assert len(result["ids"]) == 2
 
 
-class TestCalculateTokenBudget:
-    """Tests for calculate_token_budget function."""
-
-    def test_default_ratios_sum(self):
-        """Default ratios should sum to 1.0 (system+semantic+context)."""
-        from app.utils import calculate_token_budget
-
-        result = calculate_token_budget(1000)
-        assert result["system"] + result["semantic"] + result["context"] == 1000
-
-    def test_custom_ratios(self):
-        """Custom ratios should produce correct proportional budgets."""
-        from app.utils import calculate_token_budget
-
-        result = calculate_token_budget(
-            100, system_ratio=0.1, semantic_ratio=0.6, context_ratio=0.3
-        )
-        assert result["system"] == 10
-        assert result["semantic"] == 60
-        assert result["context"] == 30
-
-    def test_zero_budget(self):
-        """Zero total budget yields all zeros."""
-        from app.utils import calculate_token_budget
-
-        result = calculate_token_budget(0)
-        assert result["system"] == 0
-        assert result["semantic"] == 0
-        assert result["context"] == 0
-
-
 class TestBuildAugmentedMessages:
     """Tests for build_augmented_messages function (mocked I/O)."""
 
