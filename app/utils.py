@@ -219,15 +219,22 @@ async def build_augmented_messages(incoming_messages: List[Dict]) -> List[Dict]:
     }
     
     # === LAYER 1: System Prompt ===
-    system_content = ""
+    # Caller's system message passes through; systemprompt.md appends if non-empty.
+    caller_system = ""
     for msg in incoming_messages:
         if msg.get("role") == "system":
-            system_content = msg.get("content", "")
+            caller_system = msg.get("content", "")
             break
-    
-    if system_prompt:
-        system_content += "\n\n" + system_prompt
-    
+
+    if caller_system and system_prompt:
+        system_content = caller_system + "\n\n" + system_prompt
+    elif caller_system:
+        system_content = caller_system
+    elif system_prompt:
+        system_content = system_prompt
+    else:
+        system_content = ""
+
     if system_content:
         messages.append({"role": "system", "content": system_content})
         logger.info(f"Layer 1 (system): {count_tokens(system_content)} tokens")

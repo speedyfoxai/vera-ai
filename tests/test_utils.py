@@ -1,6 +1,7 @@
 """Tests for utility functions."""
 import pytest
-from app.utils import count_tokens, truncate_by_tokens, parse_curated_turn
+from unittest.mock import AsyncMock, MagicMock, patch
+from app.utils import count_tokens, truncate_by_tokens, parse_curated_turn, build_augmented_messages
 
 
 class TestCountTokens:
@@ -327,3 +328,71 @@ class TestBuildAugmentedMessages:
 
         contents = [m["content"] for m in result]
         assert any("Old question" in c or "Old answer" in c for c in contents)
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_appends_to_caller_system(self):
+        """systemprompt.md content appends to caller's system message."""
+        import app.utils as utils_module
+
+        mock_qdrant = self._make_qdrant_mock()
+
+        with patch.object(utils_module, "load_system_prompt", return_value="Vera memory context"), \
+             patch.object(utils_module, "get_qdrant_service", return_value=mock_qdrant):
+            incoming = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Hello"}
+            ]
+            result = await build_augmented_messages(incoming)
+
+            system_msg = result[0]
+            assert system_msg["role"] == "system"
+            assert system_msg["content"] == "You are a helpful assistant.\n\nVera memory context"
+
+    @pytest.mark.asyncio
+    async def test_empty_system_prompt_passthrough(self):
+        """When systemprompt.md is empty, only caller's system message passes through."""
+        import app.utils as utils_module
+
+        mock_qdrant = self._make_qdrant_mock()
+
+        with patch.object(utils_module, "load_system_prompt", return_value=""), \
+             patch.object(utils_module, "get_qdrant_service", return_value=mock_qdrant):
+            incoming = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Hello"}
+            ]
+            result = await build_augmented_messages(incoming)
+
+            system_msg = result[0]
+            assert system_msg["content"] == "You are a helpful assistant."
+
+    @pytest.mark.asyncio
+    async def test_no_caller_system_with_vera_prompt(self):
+        """When caller sends no system message but systemprompt.md exists, use vera prompt."""
+        import app.utils as utils_module
+
+        mock_qdrant = self._make_qdrant_mock()
+
+        with patch.object(utils_module, "load_system_prompt", return_value="Vera memory context"), \
+             patch.object(utils_module, "get_qdrant_service", return_value=mock_qdrant):
+            incoming = [{"role": "user", "content": "Hello"}]
+            result = await build_augmented_messages(incoming)
+
+            system_msg = result[0]
+            assert system_msg["role"] == "system"
+            assert system_msg["content"] == "Vera memory context"
+
+    @pytest.mark.asyncio
+    async def test_no_system_anywhere(self):
+        """When neither caller nor systemprompt.md provides system content, no system message."""
+        import app.utils as utils_module
+
+        mock_qdrant = self._make_qdrant_mock()
+
+        with patch.object(utils_module, "load_system_prompt", return_value=""), \
+             patch.object(utils_module, "get_qdrant_service", return_value=mock_qdrant):
+            incoming = [{"role": "user", "content": "Hello"}]
+            result = await build_augmented_messages(incoming)
+
+            # First message should be user, not system
+            assert result[0]["role"] == "user"
